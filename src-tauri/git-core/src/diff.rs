@@ -1,5 +1,6 @@
 //! Diferenças de um arquivo (somente leitura).
 //!
+//! - o que entrará num commit: `git diff HEAD -- <arquivo>` (Fase 2; ver `DiffTarget::Head`)
 //! - alterações preparadas:   `git diff --cached -- <arquivo>`
 //! - alterações não preparadas / conflitos: `git diff -- <arquivo>`
 //! - arquivos não rastreados: `git diff --no-index -- /dev/null <arquivo>` (prévia como "arquivo novo")
@@ -8,6 +9,7 @@
 //! de forma literal (`--literal-pathspecs`), sem curingas nem "pathspec magic".
 
 use crate::{
+    branches::head_oid,
     error::{ErrorCode, GitError, Result},
     repository::require_repository_root,
     runner::{Git, RunOptions},
@@ -25,6 +27,10 @@ pub enum DiffTarget {
     Unstaged,
     Untracked,
     Conflicted,
+    /// Conteúdo atual do arquivo comparado ao último commit (`HEAD`): exatamente o que um commit
+    /// seletivo (`git commit --only`) registraria para este arquivo, somando alterações
+    /// preparadas e não preparadas. Em repositórios sem commits, mostra o arquivo como novo.
+    Head,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -151,6 +157,19 @@ pub fn get_file_diff(git: &Git, request: &DiffRequest) -> Result<FileDiff> {
             args.extend(["--no-index", "--", "/dev/null", request.path.as_str()]);
             ok_exit_codes = &[0, 1];
         }
+        DiffTarget::Head => {
+            if head_oid(git, &root)?.is_some() {
+                args.extend(["HEAD", "-M", "--"]);
+                if let Some(orig) = request.orig_path.as_deref() {
+                    args.push(orig);
+                }
+                args.push(request.path.as_str());
+            } else {
+                // Sem commits ainda: o commit registrará o arquivo inteiro como novo.
+                args.extend(["--no-index", "--", "/dev/null", request.path.as_str()]);
+                ok_exit_codes = &[0, 1];
+            }
+        }
     }
 
     let opts = RunOptions {
@@ -199,6 +218,7 @@ fn empty_notice(target: DiffTarget, mode_changed: bool) -> &'static str {
         DiffTarget::Staged => "Não há diferenças preparadas para este arquivo.",
         DiffTarget::Unstaged => "Não há diferenças não preparadas para este arquivo.",
         DiffTarget::Conflicted => "Não há diferenças textuais disponíveis para este conflito.",
+        DiffTarget::Head => "Não há diferenças em relação ao último commit para este arquivo.",
     }
 }
 

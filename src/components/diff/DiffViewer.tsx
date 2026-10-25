@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { DiffState } from "../../hooks/useFileDiff";
 import { selectionKey, splitPath, type Selection } from "../../lib/changes";
 import type { DiffLine, DiffTarget, FileDiff, LineKind } from "../../types/git";
@@ -12,6 +13,7 @@ const TARGET_LABELS: Record<DiffTarget, string> = {
   unstaged: "Não preparada",
   untracked: "Não rastreado (prévia do arquivo novo)",
   conflicted: "Conflito",
+  head: "O que será registrado (arquivo atual × último commit)",
 };
 
 const LINE_STYLES: Record<LineKind, string> = {
@@ -33,9 +35,11 @@ interface DiffViewerProps {
   selection: Selection | null;
   diff: DiffState;
   onRetry: () => void;
+  /** Aviso opcional exibido sob o cabeçalho do arquivo (ex.: arquivo parcialmente preparado). */
+  banner?: ReactNode;
 }
 
-export function DiffViewer({ selection, diff, onRetry }: DiffViewerProps) {
+export function DiffViewer({ selection, diff, onRetry, banner }: DiffViewerProps) {
   if (!selection) {
     return (
       <main className="min-w-0 flex-1 bg-canvas" aria-label="Diferenças">
@@ -76,6 +80,12 @@ export function DiffViewer({ selection, diff, onRetry }: DiffViewerProps) {
           Somente leitura
         </span>
       </div>
+
+      {banner && (
+        <div role="note" className="border-b border-modified/40 bg-modified/10 px-4 py-2 text-xs text-modified">
+          {banner}
+        </div>
+      )}
 
       <div className="min-h-0 flex-1 overflow-auto" aria-busy={diff.loading} data-selection={selectionKey(selection)}>
         <DiffBody diff={diff} onRetry={onRetry} />

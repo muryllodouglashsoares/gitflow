@@ -15,6 +15,9 @@ const KNOWN_CODES: ReadonlySet<string> = new Set<ErrorCode>([
   "TIMEOUT",
   "OUTPUT_TOO_LARGE",
   "UNEXPECTED_OUTPUT",
+  "OPERATION_BLOCKED",
+  "STALE_REVIEW",
+  "REPOSITORY_BUSY",
   "FRONTEND",
 ]);
 

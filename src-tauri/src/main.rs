@@ -11,6 +11,12 @@ fn main() {
             commands::open_repository,
             commands::get_repository_status,
             commands::get_file_diff,
+            commands::list_branches,
+            commands::check_branch_name,
+            commands::create_branch,
+            commands::switch_branch,
+            commands::prepare_commit_review,
+            commands::create_commit,
         ])
         .run(tauri::generate_context!())
         .expect("falha ao iniciar o GitFlow Desktop");

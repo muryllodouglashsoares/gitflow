@@ -28,6 +28,12 @@ export interface GitState {
   info: GitAvailability | null;
 }
 
+/** Resultado de uma operação de escrita executada com exclusividade. */
+export type ExclusiveResult<T> = { ok: true; value: T } | { ok: false; error: GitError };
+
+/** Executa uma operação de escrita; recusa se outra ainda estiver em andamento. */
+export type RunExclusive = <T>(label: string, job: () => Promise<T>) => Promise<ExclusiveResult<T>>;
+
 const EMPTY_STATUS: StatusState = { data: null, loading: false, error: null, updatedAt: null };
 
 /** Evita rajadas de leituras quando a janela recupera o foco várias vezes seguidas. */
@@ -49,6 +55,9 @@ export function useRepositoryWorkspace() {
   const [openFailure, setOpenFailure] = useState<OpenFailure | null>(null);
   const [status, setStatus] = useState<StatusState>(EMPTY_STATUS);
   const [selection, setSelection] = useState<Selection | null>(null);
+
+  const [mutating, setMutating] = useState<string | null>(null);
+  const mutatingRef = useRef<string | null>(null);
 
   const openSeq = useRef(0);
   const statusSeq = useRef(0);
@@ -136,7 +145,44 @@ export function useRepositoryWorkspace() {
     [checkGit, loadStatus],
   );
 
+  /**
+   * Garante que só uma operação de escrita (criar branch, trocar de branch, commit) rode por vez,
+   * impedindo cliques repetidos ou operações concorrentes sobre o mesmo repositório. O backend
+   * também protege o repositório com uma trava própria.
+   */
+  const runExclusive = useCallback<RunExclusive>(async (label, job) => {
+    if (mutatingRef.current !== null) {
+      return {
+        ok: false,
+        error: {
+          code: "REPOSITORY_BUSY",
+          message: "Outra operação ainda está em andamento. Aguarde ela terminar e tente novamente.",
+        },
+      };
+    }
+    mutatingRef.current = label;
+    setMutating(label);
+    try {
+      return { ok: true, value: await job() };
+    } catch (error) {
+      return { ok: false, error: errorFrom(error) };
+    } finally {
+      mutatingRef.current = null;
+      setMutating(null);
+    }
+  }, []);
+
   const chooseFolder = useCallback(async () => {
+    if (mutatingRef.current !== null) {
+      setOpenFailure({
+        path: null,
+        error: {
+          code: "REPOSITORY_BUSY",
+          message: "Aguarde a operação em andamento terminar antes de abrir outro repositório.",
+        },
+      });
+      return;
+    }
     setPicking(true);
     try {
       const path = await pickFolder();
@@ -178,6 +224,9 @@ export function useRepositoryWorkspace() {
     selection: activeSelection,
     select: setSelection,
     busy: opening || picking,
+    /** Nome da operação de escrita em andamento (ou `null`). */
+    mutating,
+    runExclusive,
     opening,
     openFailure,
     dismissOpenFailure: useCallback(() => setOpenFailure(null), []),

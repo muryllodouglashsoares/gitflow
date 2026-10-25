@@ -1,9 +1,15 @@
-//! Comandos Tauri expostos à interface. Todos são **somente leitura** e finos:
-//! validam e delegam para o crate `gitflow-git`, executando o Git fora da thread principal.
+//! Comandos Tauri expostos à interface. São finos: validam e delegam para o crate `gitflow-git`,
+//! executando o Git fora da thread principal.
+//!
+//! Leitura: `check_git`, `open_repository`, `get_repository_status`, `get_file_diff`,
+//! `list_branches`, `check_branch_name`, `prepare_commit_review`.
+//! Escrita local (Fase 2, cada uma uma operação predefinida): `create_branch`, `switch_branch`,
+//! `create_commit`. Nenhum comando aceita texto de comando Git vindo da interface.
 
 use gitflow_git::{
-    self as core, DiffRequest, ErrorCode, FileDiff, Git, GitAvailability, GitError,
-    RepositoryInfo, RepositoryStatus,
+    self as core, BranchList, BranchNameCheck, CommitRequest, CommitResult, CommitReview,
+    CreateBranchRequest, CreatedBranch, DiffRequest, ErrorCode, FileDiff, Git, GitAvailability,
+    GitError, RepositoryInfo, RepositoryStatus, ReviewRequest, SwitchBranchRequest, SwitchResult,
 };
 
 /// Executa trabalho bloqueante (processos do Git) em uma thread dedicada,
@@ -55,6 +61,66 @@ pub async fn get_file_diff(request: DiffRequest) -> Result<FileDiff, GitError> {
     blocking(move || {
         let git = Git::locate()?;
         core::get_file_diff(&git, &request)
+    })
+    .await
+}
+
+/// Branches locais (nunca referências remotas) e branch atual.
+#[tauri::command]
+pub async fn list_branches(repo_path: String) -> Result<BranchList, GitError> {
+    blocking(move || {
+        let git = Git::locate()?;
+        core::list_branches(&git, &repo_path)
+    })
+    .await
+}
+
+/// Verifica (somente leitura) se um nome de branch pode ser criado.
+#[tauri::command]
+pub async fn check_branch_name(repo_path: String, name: String) -> Result<BranchNameCheck, GitError> {
+    blocking(move || {
+        let git = Git::locate()?;
+        core::check_branch_name(&git, &repo_path, &name)
+    })
+    .await
+}
+
+/// Cria uma branch local a partir de uma branch-base. **Não** troca de branch.
+#[tauri::command]
+pub async fn create_branch(request: CreateBranchRequest) -> Result<CreatedBranch, GitError> {
+    blocking(move || {
+        let git = Git::locate()?;
+        core::create_branch(&git, &request)
+    })
+    .await
+}
+
+/// Troca de branch somente quando não há alterações locais em risco. Nunca força a troca.
+#[tauri::command]
+pub async fn switch_branch(request: SwitchBranchRequest) -> Result<SwitchResult, GitError> {
+    blocking(move || {
+        let git = Git::locate()?;
+        core::switch_branch(&git, &request)
+    })
+    .await
+}
+
+/// Valida os arquivos selecionados e devolve o que será registrado (somente leitura).
+#[tauri::command]
+pub async fn prepare_commit_review(request: ReviewRequest) -> Result<CommitReview, GitError> {
+    blocking(move || {
+        let git = Git::locate()?;
+        core::prepare_commit_review(&git, &request)
+    })
+    .await
+}
+
+/// Cria um commit local apenas com os arquivos selecionados. Nunca executa `push`.
+#[tauri::command]
+pub async fn create_commit(request: CommitRequest) -> Result<CommitResult, GitError> {
+    blocking(move || {
+        let git = Git::locate()?;
+        core::create_commit(&git, &request)
     })
     .await
 }

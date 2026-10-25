@@ -36,6 +36,12 @@ pub enum ErrorCode {
     OutputTooLarge,
     /// A saída do Git não está no formato esperado.
     UnexpectedOutput,
+    /// O estado do repositório não permite executar a operação com segurança.
+    OperationBlocked,
+    /// O conteúdo (ou a branch) mudou desde a revisão apresentada ao usuário.
+    StaleReview,
+    /// Outra operação de escrita ainda está em andamento neste repositório.
+    RepositoryBusy,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -71,6 +77,11 @@ impl GitError {
 
     pub fn invalid_argument(message: impl Into<String>) -> Self {
         Self::new(ErrorCode::InvalidArgument, message)
+    }
+
+    /// Operação recusada porque o estado do repositório não a permite com segurança.
+    pub fn blocked(message: impl Into<String>) -> Self {
+        Self::new(ErrorCode::OperationBlocked, message)
     }
 }
 

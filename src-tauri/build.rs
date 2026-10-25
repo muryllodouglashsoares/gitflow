@@ -8,6 +8,12 @@ fn main() {
                 "open_repository",
                 "get_repository_status",
                 "get_file_diff",
+                "list_branches",
+                "check_branch_name",
+                "create_branch",
+                "switch_branch",
+                "prepare_commit_review",
+                "create_commit",
             ]),
         ),
     )

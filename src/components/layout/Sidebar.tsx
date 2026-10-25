@@ -1,14 +1,14 @@
 import type { ReactNode } from "react";
 import type { GitState } from "../../hooks/useRepositoryWorkspace";
 import { Button } from "../common/Button";
-import { ChangesIcon, FolderOpenIcon, LogoMark } from "../common/icons";
+import { BranchIcon, ChangesIcon, FolderOpenIcon, LogoMark } from "../common/icons";
 import { Spinner } from "../common/Spinner";
 
 /**
- * Itens de navegação. Nesta fase existe só "Alterações"; as próximas fases
- * acrescentam entradas aqui (e uma tela correspondente em App.tsx).
+ * Itens de navegação. As próximas fases acrescentam entradas aqui
+ * (e uma tela correspondente em App.tsx).
  */
-export type NavId = "changes";
+export type NavId = "changes" | "branches";
 
 interface NavItem {
   id: NavId;
@@ -16,17 +16,22 @@ interface NavItem {
   icon: ReactNode;
 }
 
-const NAV_ITEMS: NavItem[] = [{ id: "changes", label: "Alterações", icon: <ChangesIcon /> }];
+const NAV_ITEMS: NavItem[] = [
+  { id: "changes", label: "Alterações", icon: <ChangesIcon /> },
+  { id: "branches", label: "Branches", icon: <BranchIcon /> },
+];
 
 interface SidebarProps {
   active: NavId;
   git: GitState;
   busy: boolean;
+  /** Impede abrir outro repositório (ex.: operação de escrita em andamento). */
+  openDisabled?: boolean;
   onOpenRepository: () => void;
   onNavigate: (id: NavId) => void;
 }
 
-export function Sidebar({ active, git, busy, onOpenRepository, onNavigate }: SidebarProps) {
+export function Sidebar({ active, git, busy, openDisabled = false, onOpenRepository, onNavigate }: SidebarProps) {
   return (
     <aside className="flex w-56 shrink-0 flex-col border-r border-line bg-surface" aria-label="Navegação">
       <div className="flex items-center gap-2.5 px-4 pt-4 pb-3">
@@ -35,7 +40,7 @@ export function Sidebar({ active, git, busy, onOpenRepository, onNavigate }: Sid
       </div>
 
       <div className="px-3 pb-3">
-        <Button variant="secondary" className="w-full" onClick={onOpenRepository} disabled={busy}>
+        <Button variant="secondary" className="w-full" onClick={onOpenRepository} disabled={busy || openDisabled}>
           {busy ? <Spinner /> : <FolderOpenIcon />}
           {busy ? "Abrindo…" : "Abrir repositório"}
         </Button>

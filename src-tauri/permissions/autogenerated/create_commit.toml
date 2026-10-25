@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-create-commit"
+description = "Enables the create_commit command without any pre-configured scope."
+commands.allow = ["create_commit"]
+
+[[permission]]
+identifier = "deny-create-commit"
+description = "Denies the create_commit command without any pre-configured scope."
+commands.deny = ["create_commit"]

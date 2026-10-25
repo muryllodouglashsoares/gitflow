@@ -1,10 +1,17 @@
 import { useState } from "react";
-import { ErrorBanner } from "./components/common/ErrorBanner";
+import { BranchesView } from "./components/branches/BranchesView";
 import { ChangesPanel } from "./components/changes/ChangesPanel";
+import { ErrorBanner } from "./components/common/ErrorBanner";
+import { CommitForm } from "./components/commit/CommitForm";
+import { CommitResultBanner } from "./components/commit/CommitResultBanner";
+import { ReviewFileList } from "./components/commit/ReviewFileList";
 import { DiffViewer } from "./components/diff/DiffViewer";
 import { RepositoryHeader } from "./components/layout/RepositoryHeader";
 import { Sidebar, type NavId } from "./components/layout/Sidebar";
 import { WelcomeScreen } from "./components/welcome/WelcomeScreen";
+import { useBranchActions } from "./hooks/useBranchActions";
+import { useBranches } from "./hooks/useBranches";
+import { useCommitFlow } from "./hooks/useCommitFlow";
 import { useFileDiff } from "./hooks/useFileDiff";
 import { useRepositoryWorkspace } from "./hooks/useRepositoryWorkspace";
 
@@ -12,8 +19,36 @@ export default function App() {
   const workspace = useRepositoryWorkspace();
   const { repo, status, selection } = workspace;
   const [nav, setNav] = useState<NavId>("changes");
+  const repoPath = repo?.path ?? null;
 
-  const { diff, retry } = useFileDiff(repo?.path ?? null, selection, status.updatedAt);
+  const commit = useCommitFlow({
+    repoPath,
+    status,
+    runExclusive: workspace.runExclusive,
+    refresh: workspace.refresh,
+  });
+  const reviewing = commit.step === "review";
+
+  // Um único visualizador de diff: mostra o arquivo escolhido na lista de alterações ou, durante a
+  // revisão, o arquivo do commit (conteúdo atual × último commit). Ambos são relidos quando o
+  // estado do repositório muda, para nunca exibir um diff antigo.
+  const { diff, retry } = useFileDiff(
+    repoPath,
+    reviewing ? commit.reviewSelection : selection,
+    reviewing ? commit.reviewVersion : status.updatedAt,
+  );
+
+  const branches = useBranches(repoPath, status.updatedAt, nav === "branches");
+  const branchActions = useBranchActions(repoPath, workspace.runExclusive, workspace.refresh);
+
+  const reviewFile = commit.review.data?.files.find((f) => f.path === commit.focusPath);
+  const reviewBanner = reviewFile
+    ? reviewFile.untracked
+      ? "Arquivo novo: ele será adicionado ao Git por este commit."
+      : reviewFile.hasStaged && reviewFile.hasUnstaged
+        ? "Este arquivo tem alterações preparadas e também não preparadas. O commit registra o conteúdo atual do arquivo, com as duas, e é isso que o diff abaixo mostra."
+        : undefined
+    : undefined;
 
   return (
     <div className="flex h-full">
@@ -21,6 +56,7 @@ export default function App() {
         active={nav}
         git={workspace.git}
         busy={workspace.busy}
+        openDisabled={workspace.mutating !== null}
         onOpenRepository={() => void workspace.chooseFolder()}
         onNavigate={setNav}
       />
@@ -38,16 +74,79 @@ export default function App() {
               />
             )}
             <RepositoryHeader repo={repo} status={status} onRefresh={workspace.refresh} />
-            {/* Fases futuras: renderizar outras telas conforme `nav`. */}
-            <div className="flex min-h-0 flex-1">
-              <ChangesPanel
-                status={status}
-                selection={selection}
-                onSelect={workspace.select}
-                onRefresh={workspace.refresh}
+
+            {nav === "branches" ? (
+              <BranchesView
+                repoPath={repo.path}
+                status={status.data}
+                branches={branches.branches}
+                pending={branchActions.pending}
+                outcome={branchActions.outcome}
+                error={branchActions.error}
+                locked={workspace.mutating !== null}
+                onReload={branches.reload}
+                onCreate={branchActions.createBranch}
+                onSwitch={branchActions.switchTo}
+                onDismiss={branchActions.dismiss}
               />
-              <DiffViewer selection={selection} diff={diff} onRetry={retry} />
-            </div>
+            ) : (
+              <>
+                {commit.result && (
+                  <CommitResultBanner result={commit.result} onDismiss={commit.dismissResult} />
+                )}
+                <div className="flex min-h-0 flex-1">
+                  {reviewing ? (
+                    <ReviewFileList
+                      review={commit.review}
+                      focusPath={commit.focusPath}
+                      onFocus={commit.focus}
+                      onBack={commit.backToSelection}
+                      disabled={commit.committing}
+                    />
+                  ) : (
+                    <ChangesPanel
+                      status={status}
+                      selection={selection}
+                      onSelect={workspace.select}
+                      onRefresh={workspace.refresh}
+                      commit={{
+                        selected: commit.selected,
+                        onToggle: commit.toggle,
+                        onSetMany: commit.setMany,
+                        blocker: commit.blocker,
+                        locked: workspace.mutating !== null,
+                        onReview: commit.startReview,
+                      }}
+                    />
+                  )}
+                  <div className="flex min-w-0 flex-1 flex-col">
+                    <DiffViewer
+                      selection={reviewing ? commit.reviewSelection : selection}
+                      diff={diff}
+                      onRetry={retry}
+                      banner={reviewing ? reviewBanner : undefined}
+                    />
+                    {reviewing && (
+                      <CommitForm
+                        review={commit.review}
+                        message={commit.message}
+                        messageProblem={commit.messageProblem}
+                        confirmed={commit.confirmed}
+                        committing={commit.committing}
+                        canSubmit={commit.canSubmit}
+                        notice={commit.notice}
+                        error={commit.commitError}
+                        onMessage={commit.changeMessage}
+                        onConfirm={commit.setConfirmed}
+                        onSubmit={() => void commit.submit()}
+                        onCancel={commit.backToSelection}
+                        onDismissError={commit.dismissCommitError}
+                      />
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
           </>
         ) : (
           <WelcomeScreen

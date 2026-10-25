@@ -18,6 +18,9 @@ export type ErrorCode =
   | "TIMEOUT"
   | "OUTPUT_TOO_LARGE"
   | "UNEXPECTED_OUTPUT"
+  | "OPERATION_BLOCKED"
+  | "STALE_REVIEW"
+  | "REPOSITORY_BUSY"
   /** Erros que nascem no frontend (ex.: executando fora do Tauri). */
   | "FRONTEND";
 
@@ -91,7 +94,11 @@ export interface RepositoryStatus {
   operation: Operation | null;
 }
 
-export type DiffTarget = "staged" | "unstaged" | "untracked" | "conflicted";
+/**
+ * `head` (Fase 2): conteúdo atual do arquivo comparado ao último commit, isto é, exatamente
+ * o que um commit seletivo registraria para o arquivo.
+ */
+export type DiffTarget = "staged" | "unstaged" | "untracked" | "conflicted" | "head";
 
 export interface DiffRequest {
   repoPath: string;
@@ -128,4 +135,112 @@ export interface FileDiff {
   renamedFrom: string | null;
   truncated: boolean;
   notice: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// Fase 2: branches locais
+// ---------------------------------------------------------------------------
+
+export interface BranchEntry {
+  /** Nome sem o prefixo `refs/heads/`. */
+  name: string;
+  current: boolean;
+  oid: string;
+  upstream: string | null;
+  subject: string | null;
+}
+
+export interface BranchList {
+  repoPath: string;
+  current: string | null;
+  detached: boolean;
+  /** A branch atual ainda não tem commits (por isso não aparece em `branches`). */
+  unborn: boolean;
+  headOid: string | null;
+  branches: BranchEntry[];
+}
+
+export interface BranchNameCheck {
+  valid: boolean;
+  reason: string | null;
+}
+
+export interface CreateBranchRequest {
+  repoPath: string;
+  name: string;
+  base: string;
+}
+
+export interface CreatedBranch {
+  repoPath: string;
+  name: string;
+  base: string;
+  oid: string;
+}
+
+export interface SwitchBranchRequest {
+  repoPath: string;
+  name: string;
+}
+
+export interface SwitchResult {
+  repoPath: string;
+  previous: string | null;
+  current: string;
+  headOid: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// Fase 2: revisão e commit seletivo
+// ---------------------------------------------------------------------------
+
+export interface ReviewRequest {
+  repoPath: string;
+  files: string[];
+}
+
+export interface ReviewFile {
+  path: string;
+  origPath: string | null;
+  untracked: boolean;
+  hasStaged: boolean;
+  hasUnstaged: boolean;
+  /** `head` (arquivo rastreado) ou `untracked` (arquivo novo). */
+  diffTarget: DiffTarget;
+}
+
+export interface CommitReview {
+  repoPath: string;
+  branch: string;
+  headOid: string | null;
+  files: ReviewFile[];
+  /** Arquivos preparados que não foram selecionados: continuam preparados e fora do commit. */
+  preservedStaged: string[];
+  /** Identifica o conteúdo revisado; é devolvido em `createCommit`. */
+  fingerprint: string;
+}
+
+export interface CommitRequest {
+  repoPath: string;
+  files: string[];
+  message: string;
+  expectedBranch: string;
+  fingerprint: string;
+}
+
+export interface CommittedFile {
+  /** Letra do Git: A, M, D, R, C, T. */
+  status: string;
+  path: string;
+  origPath: string | null;
+}
+
+export interface CommitResult {
+  repoPath: string;
+  branch: string;
+  oid: string;
+  shortOid: string;
+  subject: string;
+  files: CommittedFile[];
+  summary: string | null;
 }

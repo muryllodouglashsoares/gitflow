@@ -2,13 +2,14 @@
 //!
 //! Regras:
 //! - nunca passa por shell: o executável é chamado diretamente, com argumentos separados;
-//! - o ambiente é endurecido para que a execução seja previsível e somente leitura;
+//! - o ambiente é endurecido para que a execução seja previsível (as operações de escrita
+//!   ficam em módulos próprios e só executam subcomandos predefinidos);
 //! - toda execução tem tempo limite e limite de saída;
 //! - falhas são classificadas em erros compreensíveis (`GitError`).
 
 use crate::error::{ErrorCode, GitError, Result};
 use std::{
-    io::Read,
+    io::{Read, Write},
     path::{Path, PathBuf},
     process::{Command, Stdio},
     sync::Mutex,
@@ -72,6 +73,17 @@ impl Default for RunOptions<'_> {
 pub struct GitOutput {
     pub exit_code: i32,
     pub stdout: Vec<u8>,
+    /// `true` se a saída passou de `max_stdout` e foi cortada.
+    pub stdout_truncated: bool,
+}
+
+/// Resultado bruto de uma execução: o código de saída não foi interpretado.
+#[derive(Debug)]
+pub struct RawOutput {
+    /// `None` quando o processo foi encerrado por um sinal.
+    pub exit_code: Option<i32>,
+    pub stdout: Vec<u8>,
+    pub stderr: Vec<u8>,
     /// `true` se a saída passou de `max_stdout` e foi cortada.
     pub stdout_truncated: bool,
 }
@@ -142,7 +154,30 @@ impl Git {
     }
 
     /// Executa `git <args>` (sem shell) e aplica as proteções descritas no módulo.
+    /// Códigos de saída fora de `opts.ok_exit_codes` viram um erro classificado.
     pub fn run(&self, cwd: Option<&Path>, args: &[&str], opts: &RunOptions) -> Result<GitOutput> {
+        let raw = self.run_raw(cwd, args, None, opts)?;
+        match raw.exit_code {
+            Some(code) if opts.ok_exit_codes.contains(&code) => Ok(GitOutput {
+                exit_code: code,
+                stdout: raw.stdout,
+                stdout_truncated: raw.stdout_truncated,
+            }),
+            code => Err(classify_failure(code, &String::from_utf8_lossy(&raw.stderr))),
+        }
+    }
+
+    /// Como `run`, mas devolve stdout, stderr e o código de saída **sem interpretá-los**
+    /// (`opts.ok_exit_codes` é ignorado). Permite que as operações de escrita expliquem a falha
+    /// com precisão. `stdin` (opcional) é enviado ao processo, por exemplo para listas de caminhos
+    /// em `--pathspec-from-file=-` (evita o limite de tamanho da linha de comando do Windows).
+    pub fn run_raw(
+        &self,
+        cwd: Option<&Path>,
+        args: &[&str],
+        stdin: Option<&[u8]>,
+        opts: &RunOptions,
+    ) -> Result<RawOutput> {
         if let Some(dir) = cwd {
             if !dir.is_dir() {
                 return Err(GitError::new(
@@ -155,7 +190,7 @@ impl Git {
         let mut cmd = Command::new(&self.program);
         cmd.args(GLOBAL_ARGS)
             .args(args)
-            .stdin(Stdio::null())
+            .stdin(if stdin.is_some() { Stdio::piped() } else { Stdio::null() })
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .env("GIT_TERMINAL_PROMPT", "0")
@@ -171,6 +206,17 @@ impl Git {
         hide_console_window(&mut cmd);
 
         let mut child = cmd.spawn().map_err(|err| self.spawn_error(&err))?;
+
+        // A entrada é escrita em outra thread para não travar caso o Git encha o pipe de saída.
+        let stdin_pipe = child.stdin.take();
+        let input: Option<Vec<u8>> = stdin.map(|bytes| bytes.to_vec());
+        let writer = thread::spawn(move || {
+            if let (Some(mut pipe), Some(data)) = (stdin_pipe, input) {
+                // Erros aqui (ex.: o Git encerrou antes de ler tudo) aparecem no código de saída.
+                let _ = pipe.write_all(&data);
+            }
+            // `pipe` é descartado aqui, o que fecha a entrada do processo.
+        });
 
         let stdout = child.stdout.take();
         let stderr = child.stderr.take();
@@ -210,17 +256,16 @@ impl Git {
             }
         };
 
+        let _ = writer.join();
         let (stdout, stdout_truncated) = out_reader.join().unwrap_or_default();
         let (stderr, _) = err_reader.join().unwrap_or_default();
 
-        match status.code() {
-            Some(code) if opts.ok_exit_codes.contains(&code) => Ok(GitOutput {
-                exit_code: code,
-                stdout,
-                stdout_truncated,
-            }),
-            code => Err(classify_failure(code, &String::from_utf8_lossy(&stderr))),
-        }
+        Ok(RawOutput {
+            exit_code: status.code(),
+            stdout,
+            stderr,
+            stdout_truncated,
+        })
     }
 
     fn spawn_error(&self, err: &std::io::Error) -> GitError {
