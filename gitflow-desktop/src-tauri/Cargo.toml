@@ -1,0 +1,26 @@
+[package]
+name = "gitflow-desktop"
+version = "0.1.0"
+description = "GitFlow Desktop (nome provisório) — interface gráfica para Git e GitHub"
+edition = "2021"
+rust-version = "1.80"
+
+# O crate `git-core` concentra a lógica de leitura do Git e não depende do Tauri,
+# o que permite testá-la isoladamente (`cargo test -p gitflow-git`).
+[workspace]
+members = [".", "git-core"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+gitflow-git = { path = "git-core" }
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true

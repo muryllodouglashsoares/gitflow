@@ -1,0 +1,64 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-mono: "Cascadia Mono", "Cascadia Code", Consolas, ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* Superfícies */
+  --color-canvas: #0d0f12;
+  --color-surface: #12151a;
+  --color-raised: #1a1e25;
+  --color-line: #252b34;
+
+  /* Texto (contraste mínimo 4.5:1 sobre canvas/surface) */
+  --color-fg: #e6e9ee;
+  --color-muted: #98a1af;
+  --color-faint: #7d8696;
+
+  /* Destaque e estados */
+  --color-accent: #5ec8a0;
+  --color-accent-fg: #07130e;
+  --color-added: #4cc38a;
+  --color-removed: #f0706f;
+  --color-modified: #e5b84b;
+  --color-renamed: #7aa7f5;
+  --color-conflict: #f59b5b;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  overflow: hidden;
+  background: var(--color-canvas);
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #343b47 transparent;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+  border-radius: 4px;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
