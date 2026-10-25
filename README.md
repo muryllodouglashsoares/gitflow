@@ -7,9 +7,21 @@ Aplicativo desktop (Tauri + React + TypeScript + Rust) para **operar repositóri
   revisa o diff do que será registrado e cria o commit local, mostrando o resultado real do Git.
   **Não há** fetch/pull/push, ZIP, merge nem autenticação (fases 3 a 5).
 
+## Início rápido (Windows)
+
+Dê **duplo clique em `iniciar.bat`** (na raiz do projeto). Ele abre um terminal que:
+
+1. verifica Git (2.25+), Node.js (20+), Visual Studio Build Tools (C++), WebView2 e Rust (1.80+);
+2. instala o que faltar (via `winget`; o Rust via `rustup`) — o Windows pede permissão de administrador só se necessário;
+3. executa `npm install` (apenas na primeira vez ou quando `package*.json` mudar);
+4. inicia o aplicativo (`npm run tauri:dev`). **Mantenha o terminal aberto** enquanto usa o app.
+
+Na primeira execução a instalação e a compilação do Rust levam vários minutos. Se o instalador pedir reinicialização,
+reinicie o Windows e abra o `iniciar.bat` de novo. Requer internet na primeira vez e o `winget` (Windows 10 1809+ / 11).
+
 ## Requisitos (Windows 10/11)
 
-| Item | Observação |
+| Item (instalados automaticamente pelo `iniciar.bat`) | Observação |
 | --- | --- |
 | [Git for Windows](https://git-scm.com/download/win) | Usado para todas as consultas. Precisa estar no PATH (ou instalado em `Program Files\Git`). |
 | [Node.js](https://nodejs.org) 20+ | Frontend e CLI do Tauri. |
