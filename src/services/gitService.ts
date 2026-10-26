@@ -4,7 +4,8 @@
  * Todos os comandos abaixo são explícitos e correspondem 1:1 aos `#[tauri::command]`
  * registrados em `src-tauri/src/commands.rs`. Leitura: checkGit, openRepository, getStatus,
  * getFileDiff, listBranches, checkBranchName, prepareCommitReview. Escrita local (Fase 2):
- * createBranch, switchBranch, createCommit. A interface nunca envia comandos ou argumentos
+ * createBranch, switchBranch, createCommit. Sincronização remota (Fase 3): getSyncStatus (somente
+ * leitura, sem rede) e as operações predefinidas fetchRemote, pullBranch e pushBranch. A interface nunca envia comandos ou argumentos
  * de Git: apenas caminhos, nomes de branch, mensagem de commit e identificadores.
  */
 
@@ -19,14 +20,21 @@ import type {
   CreateBranchRequest,
   CreatedBranch,
   DiffRequest,
+  FetchRequest,
+  FetchResult,
   FileDiff,
   GitAvailability,
   GitError,
+  PullRequest,
+  PullResult,
+  PushRequest,
+  PushResult,
   RepositoryInfo,
   RepositoryStatus,
   ReviewRequest,
   SwitchBranchRequest,
   SwitchResult,
+  SyncStatus,
 } from "../types/git";
 
 /** Erro tipado lançado pelo serviço; carrega o `GitError` original. */
@@ -83,6 +91,19 @@ export const gitService = {
 
   /** Cria o commit local (nunca faz push). */
   createCommit: (request: CommitRequest) => call<CommitResult>("create_commit", { request }),
+
+  // --- Fase 3: sincronização remota ---
+  /** Remotos, upstream e situação (somente leitura; não usa a rede). */
+  getSyncStatus: (repoPath: string) => call<SyncStatus>("get_sync_status", { repoPath }),
+
+  /** Atualiza as referências do remoto. Não altera arquivos nem integra commits. */
+  fetchRemote: (request: FetchRequest) => call<FetchResult>("fetch_remote", { request }),
+
+  /** Baixa e integra; o backend bloqueia com alterações locais, conflitos ou operação em andamento. */
+  pullBranch: (request: PullRequest) => call<PullResult>("pull_branch", { request }),
+
+  /** Envia a branch atual ao seu upstream. Nunca força e nunca cria upstream. */
+  pushBranch: (request: PushRequest) => call<PushResult>("push_branch", { request }),
 };
 
 /** Extrai o `GitError` de qualquer coisa lançada por este serviço. */

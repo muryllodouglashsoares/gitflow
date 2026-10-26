@@ -6,7 +6,8 @@
 //!
 //! Consultas (`rev-parse`, `status`, `diff`, `for-each-ref`) e, a partir da Fase 2, as
 //! operações locais de escrita **predefinidas**: criar branch, trocar de branch e criar commit
-//! seletivo. Não existe execução de comandos arbitrários: cada operação monta seus próprios
+//! seletivo. A Fase 3 acrescenta o diagnóstico de sincronização e `fetch`, `pull` e `push`
+//! predefinidos (módulo `remote`). Não existe execução de comandos arbitrários: cada operação monta seus próprios
 //! argumentos, valida as entradas e confere o resultado real depois de executar.
 
 pub mod branches;
@@ -14,6 +15,7 @@ pub mod commit;
 pub mod diff;
 pub mod error;
 pub mod lock;
+pub mod remote;
 pub mod repository;
 pub mod runner;
 pub mod status;
@@ -28,6 +30,11 @@ pub use commit::{
 };
 pub use diff::{get_file_diff, DiffContent, DiffRequest, DiffTarget, FileDiff};
 pub use error::{ErrorCode, GitError, Result};
+pub use remote::{
+    fetch_remote, get_sync_status, pull_branch, push_branch, FetchRequest, FetchResult,
+    PullOutcome, PullRequest, PullResult, PullStrategy, PushRequest, PushResult, RemoteInfo,
+    SyncState, SyncStatus, SyncTarget, UpstreamInfo,
+};
 pub use repository::{check_availability, open_repository, GitAvailability, RepositoryInfo};
 pub use runner::Git;
 pub use status::{get_status, RepositoryStatus};

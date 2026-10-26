@@ -1,11 +1,13 @@
-# GitFlow Desktop (nome provisório) — Fase 2
+# GitFlow Desktop (nome provisório) — Fase 3
 
 Aplicativo desktop (Tauri + React + TypeScript + Rust) para **operar repositórios Git locais** sem digitar comandos.
 
 - **Fase 1** (somente leitura): seleciona uma pasta, valida o repositório e mostra branch, estado, arquivos alterados e diffs.
 - **Fase 2** (operações locais): lista, cria e troca branches; seleciona explicitamente os arquivos de um commit,
   revisa o diff do que será registrado e cria o commit local, mostrando o resultado real do Git.
-  **Não há** fetch/pull/push, ZIP, merge nem autenticação (fases 3 a 5).
+- **Fase 3** (sincronização remota): diagnóstico de remotos/upstream (sincronizada, adiantada, atrasada, divergente) e
+  as operações **fetch**, **pull** e **push** pela interface, com confirmação do destino exato, bloqueios de segurança e
+  o resultado real do Git. **Não há** ZIP, merge manual, pull requests nem armazenamento de credenciais (fases 4 a 5).
 
 ## Início rápido (Windows)
 
@@ -63,8 +65,10 @@ src-tauri/
     repository.rs            Disponibilidade do Git e validação de repositório
     status.rs                `status --porcelain=v2 -z` + parser
     diff.rs                  Diff por alvo + parser unificado
+    remote.rs                Fase 3: diagnóstico de sincronização, fetch, pull e push, classificação de falhas
     error.rs                 Erros serializáveis { code, message, details }
     tests/integration.rs     Testes com Git real em repositórios temporários
+    tests/phase3.rs          Testes da Fase 3 com remotos locais (repositórios bare temporários)
 ```
 
 Comandos nativos:
@@ -73,6 +77,7 @@ Comandos nativos:
 | --- | --- |
 | Leitura | `check_git`, `open_repository`, `get_repository_status`, `get_file_diff` (agora também com o alvo `head`), `list_branches`, `check_branch_name`, `prepare_commit_review` |
 | Escrita local (Fase 2) | `create_branch` (não troca de branch), `switch_branch`, `create_commit` |
+| Sincronização (Fase 3) | `get_sync_status` (somente leitura, sem rede), `fetch_remote`, `pull_branch`, `push_branch` |
 
 Novos módulos em `git-core/src/`: `branches.rs` (listar/validar/criar/trocar), `commit.rs` (revisão e commit seletivo),
 `lock.rs` (uma operação de escrita por repositório). `runner.rs` ganhou `run_raw` (stdout/stderr/código sem interpretação,
@@ -114,7 +119,7 @@ executados normalmente pelo Git durante o commit; se recusarem, o erro é exibid
 - Ambiente endurecido: `core.fsmonitor=false` (a configuração de um repositório não executa programas),
   `--no-ext-diff`, `--no-textconv`, `--no-optional-locks`, `GIT_TERMINAL_PROMPT=0`, variáveis `GIT_DIR`/`GIT_INDEX_FILE`… removidas.
 - Tempo limite e limite de saída em toda chamada; diff e linhas muito grandes são truncados.
-- Capabilities do Tauri concedem apenas `dialog:allow-open` e os 10 comandos listados. CSP restritiva.
+- Capabilities do Tauri concedem apenas `dialog:allow-open` e os 14 comandos listados. CSP restritiva.
 - Nenhum log de conteúdo de arquivos; mensagens de erro técnicas ficam em "Detalhes técnicos".
 
 ### Decisões relevantes
@@ -125,6 +130,100 @@ executados normalmente pelo Git durante o commit; se recusarem, o erro é exibid
 - **Respostas obsoletas** são descartadas por número de sequência e conferência do `repoPath` retornado.
 - **Dependências**: apenas React, `@tauri-apps/api`, `@tauri-apps/plugin-dialog` e Tailwind. O diff usa uma
   tabela própria (sem biblioteca extra) por ser somente leitura e simples.
+
+## Fase 3 — Sincronização remota
+
+Tela **Sincronização** na barra lateral (o texto de acompanhamento do cabeçalho também abre essa tela).
+
+### Diagnóstico (somente leitura, não usa a rede)
+
+Remotos (URLs **sem usuário/senha**), branch atual, upstream e o estado, calculados a partir das referências **locais**:
+
+| Estado | Significado |
+| --- | --- |
+| Sem remoto / Sem upstream / Upstream inválido / HEAD desanexado / Sem commits | Não há destino utilizável; pull e push ficam bloqueados com a explicação |
+| Remoto ainda não verificado | Upstream configurado, mas a referência remota ainda não existe localmente: falta `fetch` |
+| Sincronizada · Adiantada · Atrasada · Divergente | Comparação `HEAD...upstream` (`git rev-list --left-right --count`) |
+| Possivelmente desatualizada | Sem fetch há mais de 30 min (ou nunca): o aplicativo **não** afirma "sincronizada" |
+| Remoto não verificável | A última tentativa de falar com o remoto falhou (rede, credenciais, tempo) |
+
+A data do último fetch vem do `FETCH_HEAD` do Git (e do último fetch/pull concluído na sessão). Limitação: um fetch que
+falha pode regravar o `FETCH_HEAD`; por isso, após uma falha de rede/credenciais, a interface passa a mostrar "Remoto não
+verificável" até o próximo sucesso.
+
+### Operações
+
+- **Fetch** — `git fetch --no-recurse-submodules <remoto>`. O remoto tem de ser um dos listados por `git remote` (nunca
+  texto livre). Não altera arquivos nem branches locais e **não integra nada**. Sem confirmação (é só consulta).
+- **Pull** — `git pull --no-edit --no-recurse-submodules <remoto> <branch>` com remoto e branch do **upstream já confirmado**.
+  Bloqueado com alterações locais em arquivos rastreados (preparadas ou não), conflitos, merge/rebase/etc. em andamento,
+  HEAD desanexado, sem upstream, ou divergência sem estratégia configurada. Arquivos não rastreados **não** bloqueiam (o Git
+  recusa sozinho se fossem sobrescritos). A estratégia é a que o **seu** Git já tem (`pull.rebase`, `pull.ff`); se não há
+  nenhuma, o pull só aceita avanço rápido (`--ff-only`, sem merge nem rebase). Conflitos **não** são resolvidos: o
+  repositório fica no estado do Git e a interface explica como seguir.
+- **Push** — `git push --porcelain --no-recurse-submodules <remoto> refs/heads/<local>:refs/heads/<remota>` (refspec
+  explícito do upstream). Nunca usa `--force`/`--force-with-lease`, `-u`, `--all`, `--mirror` nem `--tags`, nunca cria ou
+  altera upstream e não pula hooks (`--no-verify`). Bloqueado sem commits a enviar, com o remoto à frente/divergente, sem
+  upstream ou com a referência remota ainda não buscada. Para `main`/`master` exige uma segunda confirmação (caixa de
+  seleção na interface **e** campo `confirmProtectedBranch` validado no backend).
+- **Destino confirmado**: pull e push recebem o destino que o usuário viu (branch, remoto, branch remota). O backend relê o
+  estado dentro da trava do repositório e recusa (`STALE_REVIEW`) se algo mudou.
+- **Sucesso só com prova**: código de saída 0 e, no push, nenhuma linha rejeitada na saída `--porcelain`; no pull, o HEAD antes
+  e depois. Depois de cada operação o diagnóstico e o status são lidos de novo.
+
+### Erros e autenticação
+
+Códigos novos: `AUTH_FAILED`, `PERMISSION_DENIED`, `NETWORK_ERROR`, `TLS_ERROR`, `REMOTE_NOT_FOUND`,
+`REMOTE_BRANCH_MISSING`, `PUSH_REJECTED`, `MERGE_CONFLICT`. A classificação usa o código de saída e evidências do Git
+(linhas `--porcelain` do push, estado real do repositório para conflitos, padrões do transporte); sem classificação segura,
+a mensagem é genérica com "Detalhes técnicos" higienizados (URLs sem credenciais, cabeçalhos `Authorization` ocultos).
+
+- O aplicativo **não** tem fluxo de login: usa o que o Git já tem (Git Credential Manager para HTTPS, chave SSH + agente).
+  `GIT_TERMINAL_PROMPT=0` continua ativo e o processo não tem terminal; se o remoto pedir senha, o erro orienta a configurar o
+  mecanismo fora do aplicativo (por exemplo, fazer um `git fetch` uma vez no terminal). **Nunca** peça nem cole tokens na
+  interface; o aplicativo não grava credenciais.
+- SSH em um servidor novo: confirme a chave do host uma vez no terminal (`ssh -T git@<servidor>`).
+- O Git executa o que estiver na configuração do repositório (hooks, `credential.helper`, `core.sshCommand`), como no terminal.
+  Só sincronize repositórios em que você confia.
+- `gh` (GitHub CLI) **não** é usado: fetch/pull/push/diagnóstico dependem apenas do Git. Ele só será considerado para
+  recursos exclusivos do GitHub (como pull requests), em fase futura.
+
+### Tempo limite, progresso e concorrência
+
+- Operações de rede têm tempo limite de **5 minutos** (as consultas locais continuam com 15–60 s). Ao esgotar, o processo é
+  encerrado e o resultado é "**não confirmado**" (o servidor pode ter concluído): atualize o diagnóstico antes de repetir.
+  Processos auxiliares do Git (como o transporte) podem demorar a encerrar.
+- Não há progresso percentual (o runner captura a saída só ao final): a interface mostra indicador indeterminado e a etapa
+  ("Atualizando referências remotas…", "Enviando commits…"). **Não há cancelamento** nesta fase.
+- Fetch, pull e push usam a trava por repositório (`lock.rs`) e o `runExclusive` do frontend; cliques repetidos e respostas de
+  outro repositório/tentativa são descartados (`lib/syncOperation.ts`).
+
+### Testes da Fase 3
+
+- Rust: `cargo test --manifest-path src-tauri/Cargo.toml --workspace` (`git-core/tests/phase3.rs` usa remotos bare locais;
+  sem internet nem credenciais; a configuração global do Git é isolada). O teste de conexão recusada usa `127.0.0.1:1`.
+  Falhas de autenticação/TLS reais não são reproduzíveis sem servidor: a classificação é coberta por testes unitários
+  em `remote.rs` com saídas reais do Git.
+- Frontend: `npm test` (`lib/sync.test.ts`, `lib/syncOperation.test.ts`). O projeto não tem testes de componentes React; a
+  lógica que importa (bloqueios, diagnóstico, descarte de respostas obsoletas, cliques repetidos) está em funções puras.
+
+### Validação manual da Fase 3 (Windows)
+
+1. Crie uma pasta descartável e um remoto local: `git init --bare C:\teste\remoto.git`; `git init C:\teste\meu` (identidade
+   configurada, um commit, `git remote add origin C:\teste\remoto.git`).
+2. **Sem upstream**: abra `meu` → *Sincronização*: "Sem upstream"; pull/push desabilitados com o motivo. No terminal:
+   `git push -u origin main`; atualize o diagnóstico: "Possivelmente desatualizada" ou "Sincronizada" conforme a idade.
+3. **Push**: crie uma branch (`feature`), publique (`git push -u origin feature`), faça um commit pelo aplicativo → "Adiantada"
+   → *Enviar commits* → confira o destino na confirmação → confirme. Verifique com `git -C C:\teste\remoto.git log feature`.
+   Em `main`, a confirmação exige marcar a caixa extra.
+4. **Fetch/Pull**: clone o remoto em outra pasta, faça commit e `push` por lá. No aplicativo, *Atualizar referências (fetch)*
+   → "Atrasada" (nada foi integrado) → *Baixar e integrar (pull)* → HEAD avança. Teste também com um arquivo modificado: o pull
+   é bloqueado e lista o arquivo.
+5. **Push rejeitado**: faça commits nos dois clones sem fetch e envie do outro clone primeiro; no aplicativo o push é recusado
+   com "Nada foi enviado". Depois do fetch, o estado vira "Divergente" e o push fica bloqueado.
+6. **Falha de autenticação/rede**: `git remote set-url origin https://127.0.0.1:1/x.git` → fetch mostra erro de rede e o
+   estado vira "Remoto não verificável". Para autenticação, use uma URL HTTPS privada sem credenciais salvas: o erro orienta a
+   configurar o Git Credential Manager ou SSH fora do aplicativo e nenhuma senha é pedida na interface.
 
 ## Validação manual da Fase 2
 
@@ -140,5 +239,6 @@ executados normalmente pelo Git durante o commit; se recusarem, o erro é exibid
 
 ## Fora do escopo (próximas fases)
 
-fetch/pull/push, merge, importação de ZIP, autenticação, pull requests, instalador/publicação.
+merge manual entre branches, importação de ZIP, resolução de conflitos, pull requests, sistema próprio de autenticação,
+instalador/publicação.
 A navegação lateral (`NavId`) e `App.tsx` já têm o ponto de extensão.

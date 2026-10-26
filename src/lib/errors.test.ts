@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isGitInstallationError, toGitError } from "./errors";
+import { isGitInstallationError, isRemoteUnverifiable, toGitError } from "./errors";
 
 describe("toGitError", () => {
   it("preserva o erro serializado pelo Rust", () => {
@@ -22,5 +22,15 @@ describe("toGitError", () => {
   it("identifica erros de instalação do Git", () => {
     expect(isGitInstallationError({ code: "GIT_NOT_FOUND", message: "" })).toBe(true);
     expect(isGitInstallationError({ code: "NOT_A_REPOSITORY", message: "" })).toBe(false);
+  });
+
+  it("reconhece os códigos de erro da Fase 3 e os que tornam o remoto não verificável", () => {
+    for (const code of ["AUTH_FAILED", "NETWORK_ERROR", "PUSH_REJECTED", "MERGE_CONFLICT"]) {
+      expect(toGitError({ code, message: "x" }).code).toBe(code);
+    }
+    expect(isRemoteUnverifiable({ code: "NETWORK_ERROR", message: "" })).toBe(true);
+    expect(isRemoteUnverifiable({ code: "TIMEOUT", message: "" })).toBe(true);
+    expect(isRemoteUnverifiable({ code: "PUSH_REJECTED", message: "" })).toBe(false);
+    expect(isRemoteUnverifiable({ code: "MERGE_CONFLICT", message: "" })).toBe(false);
   });
 });

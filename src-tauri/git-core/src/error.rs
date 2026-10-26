@@ -42,6 +42,22 @@ pub enum ErrorCode {
     StaleReview,
     /// Outra operação de escrita ainda está em andamento neste repositório.
     RepositoryBusy,
+    /// Credenciais ausentes, inválidas ou impossíveis de solicitar (HTTPS ou SSH). Fase 3.
+    AuthFailed,
+    /// A autenticação funcionou, mas a conta não tem permissão para a operação. Fase 3.
+    PermissionDenied,
+    /// Falha de rede: sem conexão, DNS, servidor indisponível. Fase 3.
+    NetworkError,
+    /// Certificado ou conexão TLS recusados. Fase 3.
+    TlsError,
+    /// O repositório remoto não existe ou não está acessível. Fase 3.
+    RemoteNotFound,
+    /// A branch remota não existe. Fase 3.
+    RemoteBranchMissing,
+    /// O remoto rejeitou o envio (divergência, branch protegida, hook). Fase 3.
+    PushRejected,
+    /// A integração do pull gerou conflitos e o repositório ficou em estado de integração. Fase 3.
+    MergeConflict,
 }
 
 #[derive(Debug, Clone, Serialize)]

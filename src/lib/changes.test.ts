@@ -99,7 +99,7 @@ describe("branch", () => {
       describeTracking(branch({ upstream: "origin/main", ahead: 2, behind: 1 })),
     ).toBe("origin/main · 2 à frente, 1 atrás");
     expect(describeTracking(branch({ upstream: "origin/main", ahead: 0, behind: 0 }))).toBe(
-      "origin/main · sincronizada",
+      "origin/main · em dia com a última busca",
     );
   });
 });

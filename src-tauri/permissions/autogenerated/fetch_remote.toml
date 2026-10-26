@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-fetch-remote"
+description = "Enables the fetch_remote command without any pre-configured scope."
+commands.allow = ["fetch_remote"]
+
+[[permission]]
+identifier = "deny-fetch-remote"
+description = "Denies the fetch_remote command without any pre-configured scope."
+commands.deny = ["fetch_remote"]

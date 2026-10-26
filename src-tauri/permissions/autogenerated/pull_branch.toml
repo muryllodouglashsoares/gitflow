@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-pull-branch"
+description = "Enables the pull_branch command without any pre-configured scope."
+commands.allow = ["pull_branch"]
+
+[[permission]]
+identifier = "deny-pull-branch"
+description = "Denies the pull_branch command without any pre-configured scope."
+commands.deny = ["pull_branch"]

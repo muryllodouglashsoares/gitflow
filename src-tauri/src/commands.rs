@@ -4,12 +4,16 @@
 //! Leitura: `check_git`, `open_repository`, `get_repository_status`, `get_file_diff`,
 //! `list_branches`, `check_branch_name`, `prepare_commit_review`.
 //! Escrita local (Fase 2, cada uma uma operação predefinida): `create_branch`, `switch_branch`,
-//! `create_commit`. Nenhum comando aceita texto de comando Git vindo da interface.
+//! `create_commit`.
+//! Sincronização remota (Fase 3): `get_sync_status` (somente leitura, sem rede) e as operações
+//! predefinidas `fetch_remote`, `pull_branch` e `push_branch`.
+//! Nenhum comando aceita texto de comando Git vindo da interface.
 
 use gitflow_git::{
     self as core, BranchList, BranchNameCheck, CommitRequest, CommitResult, CommitReview,
-    CreateBranchRequest, CreatedBranch, DiffRequest, ErrorCode, FileDiff, Git, GitAvailability,
-    GitError, RepositoryInfo, RepositoryStatus, ReviewRequest, SwitchBranchRequest, SwitchResult,
+    CreateBranchRequest, CreatedBranch, DiffRequest, ErrorCode, FetchRequest, FetchResult,
+    FileDiff, Git, GitAvailability, GitError, PullRequest, PullResult, PushRequest, PushResult,
+    RepositoryInfo, RepositoryStatus, ReviewRequest, SwitchBranchRequest, SwitchResult, SyncStatus,
 };
 
 /// Executa trabalho bloqueante (processos do Git) em uma thread dedicada,
@@ -121,6 +125,47 @@ pub async fn create_commit(request: CommitRequest) -> Result<CommitResult, GitEr
     blocking(move || {
         let git = Git::locate()?;
         core::create_commit(&git, &request)
+    })
+    .await
+}
+
+/// Remotos, upstream e situação de sincronização da branch atual. Somente leitura; não usa a rede.
+#[tauri::command]
+pub async fn get_sync_status(repo_path: String) -> Result<SyncStatus, GitError> {
+    blocking(move || {
+        let git = Git::locate()?;
+        core::get_sync_status(&git, &repo_path)
+    })
+    .await
+}
+
+/// Atualiza as referências de um remoto (`git fetch`). Não altera arquivos nem integra commits.
+#[tauri::command]
+pub async fn fetch_remote(request: FetchRequest) -> Result<FetchResult, GitError> {
+    blocking(move || {
+        let git = Git::locate()?;
+        core::fetch_remote(&git, &request)
+    })
+    .await
+}
+
+/// Baixa e integra as alterações do upstream. Bloqueado com alterações locais, conflitos ou
+/// operação em andamento; nunca força nem descarta trabalho local.
+#[tauri::command]
+pub async fn pull_branch(request: PullRequest) -> Result<PullResult, GitError> {
+    blocking(move || {
+        let git = Git::locate()?;
+        core::pull_branch(&git, &request)
+    })
+    .await
+}
+
+/// Envia os commits da branch atual ao seu upstream. Nunca força, nunca cria upstream.
+#[tauri::command]
+pub async fn push_branch(request: PushRequest) -> Result<PushResult, GitError> {
+    blocking(move || {
+        let git = Git::locate()?;
+        core::push_branch(&git, &request)
     })
     .await
 }

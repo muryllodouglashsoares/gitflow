@@ -15,9 +15,11 @@ interface RepositoryHeaderProps {
   repo: RepositoryInfo;
   status: StatusState;
   onRefresh: () => void;
+  /** Abre a tela de sincronização remota. */
+  onOpenSync?: () => void;
 }
 
-export function RepositoryHeader({ repo, status, onRefresh }: RepositoryHeaderProps) {
+export function RepositoryHeader({ repo, status, onRefresh, onOpenSync }: RepositoryHeaderProps) {
   const data = status.data;
   const state = data ? summarizeState(data) : null;
   const tracking = data ? describeTracking(data.branch) : null;
@@ -39,7 +41,19 @@ export function RepositoryHeader({ repo, status, onRefresh }: RepositoryHeaderPr
           </span>
         </span>
 
-        {tracking && <span className="hidden truncate text-xs text-muted lg:inline">{tracking}</span>}
+        {tracking &&
+          (onOpenSync ? (
+            <button
+              type="button"
+              onClick={onOpenSync}
+              title="Abrir a sincronização remota"
+              className="hidden truncate rounded px-1 text-xs text-muted hover:bg-raised hover:text-fg lg:inline"
+            >
+              {tracking}
+            </button>
+          ) : (
+            <span className="hidden truncate text-xs text-muted lg:inline">{tracking}</span>
+          ))}
 
         <div className="ml-auto flex shrink-0 items-center gap-3">
           {state && (

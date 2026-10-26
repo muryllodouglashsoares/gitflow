@@ -18,6 +18,14 @@ const KNOWN_CODES: ReadonlySet<string> = new Set<ErrorCode>([
   "OPERATION_BLOCKED",
   "STALE_REVIEW",
   "REPOSITORY_BUSY",
+  "AUTH_FAILED",
+  "PERMISSION_DENIED",
+  "NETWORK_ERROR",
+  "TLS_ERROR",
+  "REMOTE_NOT_FOUND",
+  "REMOTE_BRANCH_MISSING",
+  "PUSH_REJECTED",
+  "MERGE_CONFLICT",
   "FRONTEND",
 ]);
 
@@ -53,4 +61,18 @@ export function toGitError(value: unknown): GitError {
 /** Erros que indicam que o problema é o Git em si (e não a pasta escolhida). */
 export function isGitInstallationError(error: GitError): boolean {
   return error.code === "GIT_NOT_FOUND" || error.code === "GIT_UNAVAILABLE";
+}
+
+/** Falhas que indicam que o remoto não pôde ser consultado/verificado (rede, credenciais, tempo). */
+const REMOTE_UNVERIFIABLE: ReadonlySet<ErrorCode> = new Set<ErrorCode>([
+  "NETWORK_ERROR",
+  "AUTH_FAILED",
+  "PERMISSION_DENIED",
+  "TLS_ERROR",
+  "REMOTE_NOT_FOUND",
+  "TIMEOUT",
+]);
+
+export function isRemoteUnverifiable(error: GitError): boolean {
+  return REMOTE_UNVERIFIABLE.has(error.code);
 }

@@ -162,7 +162,7 @@ export function describeTracking(branch: BranchInfo): string | null {
   const parts: string[] = [];
   if (branch.ahead) parts.push(`${branch.ahead} à frente`);
   if (branch.behind) parts.push(`${branch.behind} atrás`);
-  const sync = parts.length > 0 ? parts.join(", ") : "sincronizada";
+  const sync = parts.length > 0 ? parts.join(", ") : "em dia com a última busca";
   return `${branch.upstream} · ${sync}`;
 }
 

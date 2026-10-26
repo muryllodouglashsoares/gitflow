@@ -21,6 +21,15 @@ export type ErrorCode =
   | "OPERATION_BLOCKED"
   | "STALE_REVIEW"
   | "REPOSITORY_BUSY"
+  // Fase 3: sincronização remota
+  | "AUTH_FAILED"
+  | "PERMISSION_DENIED"
+  | "NETWORK_ERROR"
+  | "TLS_ERROR"
+  | "REMOTE_NOT_FOUND"
+  | "REMOTE_BRANCH_MISSING"
+  | "PUSH_REJECTED"
+  | "MERGE_CONFLICT"
   /** Erros que nascem no frontend (ex.: executando fora do Tauri). */
   | "FRONTEND";
 
@@ -243,4 +252,106 @@ export interface CommitResult {
   subject: string;
   files: CommittedFile[];
   summary: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// Fase 3: sincronização remota
+// ---------------------------------------------------------------------------
+
+export interface RemoteInfo {
+  name: string;
+  /** URL já higienizada pelo backend (sem usuário/senha). */
+  fetchUrl: string | null;
+  pushUrl: string | null;
+}
+
+export type SyncState =
+  | "noRemote"
+  | "detachedHead"
+  | "unborn"
+  | "noUpstream"
+  | "upstreamInvalid"
+  | "upstreamNotFetched"
+  | "synced"
+  | "ahead"
+  | "behind"
+  | "diverged";
+
+export type PullStrategy = "merge" | "rebase" | "fastForwardOnly" | "unspecified";
+
+export interface UpstreamInfo {
+  remote: string;
+  remoteBranch: string;
+  /** Ex.: `origin/main`. */
+  display: string;
+  trackingRef: string;
+  trackingRefExists: boolean;
+}
+
+export interface SyncStatus {
+  repoPath: string;
+  branch: string | null;
+  headOid: string | null;
+  remotes: RemoteInfo[];
+  upstream: UpstreamInfo | null;
+  state: SyncState;
+  /** Contagens conforme as referências LOCAIS (podem estar desatualizadas). */
+  ahead: number | null;
+  behind: number | null;
+  pullStrategy: PullStrategy;
+  /** Segundos Unix da última gravação de FETCH_HEAD (último fetch/pull). */
+  lastFetchAt: number | null;
+}
+
+/** Destino que o usuário viu e confirmou; o backend recusa se ele mudou. */
+export interface SyncTarget {
+  branch: string;
+  remote: string;
+  remoteBranch: string;
+}
+
+export interface FetchRequest {
+  repoPath: string;
+  remote: string;
+}
+
+export interface FetchResult {
+  repoPath: string;
+  remote: string;
+  updatedRefs: number;
+  output: string;
+  sync: SyncStatus;
+}
+
+export interface PullRequest {
+  repoPath: string;
+  target: SyncTarget;
+}
+
+export type PullOutcome = "alreadyUpToDate" | "updated";
+
+export interface PullResult {
+  repoPath: string;
+  target: SyncTarget;
+  outcome: PullOutcome;
+  mergeCommit: boolean;
+  headBefore: string | null;
+  headAfter: string | null;
+  output: string;
+  sync: SyncStatus;
+}
+
+export interface PushRequest {
+  repoPath: string;
+  target: SyncTarget;
+  confirmProtectedBranch: boolean;
+}
+
+export interface PushResult {
+  repoPath: string;
+  target: SyncTarget;
+  pushedCommits: number;
+  localOid: string;
+  output: string;
+  sync: SyncStatus;
 }

@@ -6,6 +6,7 @@ import { CommitForm } from "./components/commit/CommitForm";
 import { CommitResultBanner } from "./components/commit/CommitResultBanner";
 import { ReviewFileList } from "./components/commit/ReviewFileList";
 import { DiffViewer } from "./components/diff/DiffViewer";
+import { SyncView } from "./components/sync/SyncView";
 import { RepositoryHeader } from "./components/layout/RepositoryHeader";
 import { Sidebar, type NavId } from "./components/layout/Sidebar";
 import { WelcomeScreen } from "./components/welcome/WelcomeScreen";
@@ -14,6 +15,7 @@ import { useBranches } from "./hooks/useBranches";
 import { useCommitFlow } from "./hooks/useCommitFlow";
 import { useFileDiff } from "./hooks/useFileDiff";
 import { useRepositoryWorkspace } from "./hooks/useRepositoryWorkspace";
+import { useSync } from "./hooks/useSync";
 
 export default function App() {
   const workspace = useRepositoryWorkspace();
@@ -40,6 +42,8 @@ export default function App() {
 
   const branches = useBranches(repoPath, status.updatedAt, nav === "branches");
   const branchActions = useBranchActions(repoPath, workspace.runExclusive, workspace.refresh);
+  // Fase 3: diagnóstico de sincronização (sem rede) sempre disponível; fetch/pull/push sob demanda.
+  const sync = useSync(repoPath, status.updatedAt, workspace.runExclusive, workspace.refresh);
 
   const reviewFile = commit.review.data?.files.find((f) => f.path === commit.focusPath);
   const reviewBanner = reviewFile
@@ -73,9 +77,16 @@ export default function App() {
                 onDismiss={workspace.dismissOpenFailure}
               />
             )}
-            <RepositoryHeader repo={repo} status={status} onRefresh={workspace.refresh} />
+            <RepositoryHeader
+              repo={repo}
+              status={status}
+              onRefresh={workspace.refresh}
+              onOpenSync={() => setNav("sync")}
+            />
 
-            {nav === "branches" ? (
+            {nav === "sync" ? (
+              <SyncView status={status.data} sync={sync} locked={workspace.mutating !== null} />
+            ) : nav === "branches" ? (
               <BranchesView
                 repoPath={repo.path}
                 status={status.data}

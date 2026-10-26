@@ -95,3 +95,12 @@ export const LogoMark = (p: IconProps) => (
     </g>
   </svg>
 );
+
+export const SyncIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M2.5 6.5a5.5 5.5 0 0 1 9.4-2.2L13.5 6" />
+    <path d="M13.5 2.8V6h-3.2" />
+    <path d="M13.5 9.5a5.5 5.5 0 0 1-9.4 2.2L2.5 10" />
+    <path d="M2.5 13.2V10h3.2" />
+  </Icon>
+);

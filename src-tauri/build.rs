@@ -14,6 +14,10 @@ fn main() {
                 "switch_branch",
                 "prepare_commit_review",
                 "create_commit",
+                "get_sync_status",
+                "fetch_remote",
+                "pull_branch",
+                "push_branch",
             ]),
         ),
     )
