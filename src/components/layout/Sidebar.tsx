@@ -1,14 +1,14 @@
 import type { ReactNode } from "react";
 import type { GitState } from "../../hooks/useRepositoryWorkspace";
 import { Button } from "../common/Button";
-import { BranchIcon, ChangesIcon, FolderOpenIcon, LogoMark, SyncIcon } from "../common/icons";
+import { BranchIcon, ChangesIcon, FolderOpenIcon, ImportIcon, LogoMark, SyncIcon } from "../common/icons";
 import { Spinner } from "../common/Spinner";
 
 /**
  * Itens de navegação. As próximas fases acrescentam entradas aqui
  * (e uma tela correspondente em App.tsx).
  */
-export type NavId = "changes" | "branches" | "sync";
+export type NavId = "changes" | "branches" | "sync" | "import";
 
 interface NavItem {
   id: NavId;
@@ -20,6 +20,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: "changes", label: "Alterações", icon: <ChangesIcon /> },
   { id: "branches", label: "Branches", icon: <BranchIcon /> },
   { id: "sync", label: "Sincronização", icon: <SyncIcon /> },
+  { id: "import", label: "Importar ZIP", icon: <ImportIcon /> },
 ];
 
 interface SidebarProps {

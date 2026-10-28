@@ -104,3 +104,12 @@ export const SyncIcon = (p: IconProps) => (
     <path d="M2.5 13.2V10h3.2" />
   </Icon>
 );
+
+/** Pacote/arquivo compactado (importação de ZIP). */
+export const ImportIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M2.5 3.25a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v9.5a1 1 0 0 1-1 1h-9a1 1 0 0 1-1-1z" />
+    <path d="M8 2.25v3m0 1.5v1.5m0 1.5v1.5" />
+    <path d="M6.25 11.25h3.5" />
+  </Icon>
+);

@@ -5,13 +5,17 @@
  * registrados em `src-tauri/src/commands.rs`. Leitura: checkGit, openRepository, getStatus,
  * getFileDiff, listBranches, checkBranchName, prepareCommitReview. Escrita local (Fase 2):
  * createBranch, switchBranch, createCommit. Sincronização remota (Fase 3): getSyncStatus (somente
- * leitura, sem rede) e as operações predefinidas fetchRemote, pullBranch e pushBranch. A interface nunca envia comandos ou argumentos
- * de Git: apenas caminhos, nomes de branch, mensagem de commit e identificadores.
+ * leitura, sem rede) e as operações predefinidas fetchRemote, pullBranch e pushBranch. Importação de
+ * ZIP (Fase 4): inspectZip (somente leitura), prepareImportBranch, applyImport, rollbackImport,
+ * createImportCommit, pushImportBranch, findImportOperation e finishImport. A interface nunca envia
+ * comandos ou argumentos de Git: apenas caminhos, nomes de branch, mensagem de commit e
+ * identificadores.
  */
 
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { toGitError } from "../lib/errors";
 import type {
+  ApplyImportRequest,
   BranchList,
   BranchNameCheck,
   CommitRequest,
@@ -25,13 +29,23 @@ import type {
   FileDiff,
   GitAvailability,
   GitError,
+  ImportCommitRequest,
+  ImportOperation,
+  ImportOperationRequest,
+  ImportPlan,
+  ImportResult,
+  InspectRequest,
+  PrepareBranchRequest,
+  PreparedBranch,
   PullRequest,
   PullResult,
+  PushImportRequest,
   PushRequest,
   PushResult,
   RepositoryInfo,
   RepositoryStatus,
   ReviewRequest,
+  RollbackResult,
   SwitchBranchRequest,
   SwitchResult,
   SyncStatus,
@@ -104,6 +118,37 @@ export const gitService = {
 
   /** Envia a branch atual ao seu upstream. Nunca força e nunca cria upstream. */
   pushBranch: (request: PushRequest) => call<PushResult>("push_branch", { request }),
+
+  // --- Fase 4: importação de ZIP ---
+  /** Lê o ZIP SEM extrair nada e devolve o plano (somente leitura). */
+  inspectZip: (request: InspectRequest) => call<ImportPlan>("inspect_zip", { request }),
+
+  /** Cria a branch de trabalho a partir da base e troca para ela (recalcula o plano antes). */
+  prepareImportBranch: (request: PrepareBranchRequest) =>
+    call<PreparedBranch>("prepare_import_branch", { request }),
+
+  /** Grava os arquivos do plano confirmado. Nunca exclui arquivos nem faz commit. */
+  applyImport: (request: ApplyImportRequest) => call<ImportResult>("apply_import", { request }),
+
+  /** Desfaz uma importação ainda sem commit, preservando edições feitas depois. */
+  rollbackImport: (request: ImportOperationRequest) =>
+    call<RollbackResult>("rollback_import", { request }),
+
+  /** Commit restrito aos arquivos da importação. Nunca faz push. */
+  createImportCommit: (request: ImportCommitRequest) =>
+    call<CommitResult>("create_import_commit", { request }),
+
+  /** Envia o commit da importação com o push da Fase 3 (nunca força, nunca cria upstream). */
+  pushImportBranch: (request: PushImportRequest) =>
+    call<PushResult>("push_import_branch", { request }),
+
+  /** Operação ainda não encerrada neste repositório (retomada). */
+  findImportOperation: (repoPath: string) =>
+    call<ImportOperation | null>("find_import_operation", { repoPath }),
+
+  /** Encerra a operação (após commit ou reversão) e limpa temporários e backups. */
+  finishImport: (request: ImportOperationRequest) =>
+    call<ImportOperation>("finish_import", { request }),
 };
 
 /** Extrai o `GitError` de qualquer coisa lançada por este serviço. */

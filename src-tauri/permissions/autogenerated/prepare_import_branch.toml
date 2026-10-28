@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-prepare-import-branch"
+description = "Enables the prepare_import_branch command without any pre-configured scope."
+commands.allow = ["prepare_import_branch"]
+
+[[permission]]
+identifier = "deny-prepare-import-branch"
+description = "Denies the prepare_import_branch command without any pre-configured scope."
+commands.deny = ["prepare_import_branch"]

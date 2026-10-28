@@ -30,6 +30,8 @@ export type ErrorCode =
   | "REMOTE_BRANCH_MISSING"
   | "PUSH_REJECTED"
   | "MERGE_CONFLICT"
+  // Fase 4: importação de ZIP
+  | "INVALID_ARCHIVE"
   /** Erros que nascem no frontend (ex.: executando fora do Tauri). */
   | "FRONTEND";
 
@@ -354,4 +356,180 @@ export interface PushResult {
   localOid: string;
   output: string;
   sync: SyncStatus;
+}
+
+// ---------------------------------------------------------------------------
+// Fase 4 — importação de ZIP
+// ---------------------------------------------------------------------------
+
+export type EntryAction = "add" | "replace" | "identical" | "blocked" | "ignored";
+
+/** Etapa persistida da operação (journal em `.git/gitflow-import/<id>`). */
+export type ImportState =
+  | "applying"
+  | "partial"
+  | "applied"
+  | "committed"
+  | "rolledBack"
+  | "finished";
+
+export interface InspectRequest {
+  repoPath: string;
+  zipPath: string;
+  /** Pasta interna do ZIP que corresponde à raiz do projeto (`""` = raiz do ZIP). */
+  sourcePrefix: string;
+  baseBranch: string;
+}
+
+export interface PlanEntry {
+  path: string;
+  action: EntryAction;
+  size: number;
+  reason: string | null;
+  newSha256: string | null;
+  oldSha256: string | null;
+  zipIndex: number;
+  zipName: string;
+}
+
+export interface PlanSummary {
+  totalEntries: number;
+  directories: number;
+  filesInScope: number;
+  add: number;
+  replace: number;
+  identical: number;
+  blocked: number;
+  ignored: number;
+  bytesToWrite: number;
+  uncompressedBytes: number;
+}
+
+export interface ZipLayout {
+  topLevelDirs: string[];
+  hasRootFiles: boolean;
+  suggestedPrefix: string | null;
+  directories: string[];
+}
+
+export interface ImportPlan {
+  /** Identifica o ZIP, a branch-base e o estado dos arquivos de destino. */
+  planId: string;
+  repoPath: string;
+  baseBranch: string;
+  baseOid: string;
+  zipPath: string;
+  zipSize: number;
+  zipSha256: string;
+  sourcePrefix: string;
+  layout: ZipLayout;
+  entries: PlanEntry[];
+  summary: PlanSummary;
+  /** Condições do repositório que impedem a importação agora. */
+  blockers: string[];
+  warnings: string[];
+  canApply: boolean;
+}
+
+export interface PrepareBranchRequest {
+  repoPath: string;
+  zipPath: string;
+  sourcePrefix: string;
+  baseBranch: string;
+  workBranch: string;
+  planId: string;
+}
+
+export interface PreparedBranch {
+  repoPath: string;
+  workBranch: string;
+  baseBranch: string;
+  baseOid: string;
+}
+
+export interface ApplyImportRequest {
+  repoPath: string;
+  zipPath: string;
+  sourcePrefix: string;
+  baseBranch: string;
+  workBranch: string;
+  planId: string;
+  /** Arquivos do plano que o usuário optou por NÃO importar. */
+  excludedPaths: string[];
+  /** Confirmação explícita de que arquivos existentes serão substituídos. */
+  confirmOverwrites: boolean;
+}
+
+export interface AppliedFile {
+  path: string;
+  action: EntryAction;
+  /** O Git enxerga alteração neste arquivo (se não, ele não poderá ser commitado). */
+  visibleInGit: boolean;
+}
+
+export interface ImportFailure {
+  path: string;
+  message: string;
+}
+
+export interface ImportResult {
+  opId: string;
+  /** `applied` (tudo gravado) ou `partial` (a gravação falhou no meio). */
+  state: ImportState;
+  repoPath: string;
+  workBranch: string;
+  applied: AppliedFile[];
+  failure: ImportFailure | null;
+  notAttempted: string[];
+  identicalSkipped: number;
+  recovery: string | null;
+}
+
+export interface ImportOperationRequest {
+  repoPath: string;
+  opId: string;
+}
+
+export interface RollbackResult {
+  opId: string;
+  state: ImportState;
+  restored: string[];
+  removed: string[];
+  keptModified: string[];
+  problems: string[];
+}
+
+export interface ImportOperationFile {
+  path: string;
+  action: EntryAction;
+}
+
+export interface ImportOperation {
+  opId: string;
+  state: ImportState;
+  repoPath: string;
+  workBranch: string;
+  baseBranch: string;
+  baseOid: string;
+  zipPath: string;
+  sourcePrefix: string;
+  files: ImportOperationFile[];
+  commitOid: string | null;
+  createdAt: number;
+}
+
+export interface ImportCommitRequest {
+  opId: string;
+  repoPath: string;
+  files: string[];
+  message: string;
+  expectedBranch: string;
+  fingerprint: string;
+}
+
+export interface PushImportRequest {
+  opId: string;
+  repoPath: string;
+  target: SyncTarget;
+  confirmProtectedBranch: boolean;
 }

@@ -7,13 +7,20 @@
 //! `create_commit`.
 //! Sincronização remota (Fase 3): `get_sync_status` (somente leitura, sem rede) e as operações
 //! predefinidas `fetch_remote`, `pull_branch` e `push_branch`.
+//! Importação de ZIP (Fase 4): `inspect_zip`, `prepare_import_branch`, `apply_import`,
+//! `rollback_import`, `create_import_commit`, `push_import_branch`, `find_import_operation` e
+//! `finish_import`. O backend revalida tudo (caminhos, plano, estado do repositório); a interface
+//! nunca é a fronteira de confiança. O envio reutiliza o `push_branch` da Fase 3.
 //! Nenhum comando aceita texto de comando Git vindo da interface.
 
 use gitflow_git::{
-    self as core, BranchList, BranchNameCheck, CommitRequest, CommitResult, CommitReview,
-    CreateBranchRequest, CreatedBranch, DiffRequest, ErrorCode, FetchRequest, FetchResult,
-    FileDiff, Git, GitAvailability, GitError, PullRequest, PullResult, PushRequest, PushResult,
-    RepositoryInfo, RepositoryStatus, ReviewRequest, SwitchBranchRequest, SwitchResult, SyncStatus,
+    self as core, ApplyImportRequest, BranchList, BranchNameCheck, CommitRequest, CommitResult,
+    CommitReview, CreateBranchRequest, CreatedBranch, DiffRequest, ErrorCode, FetchRequest,
+    FetchResult, FileDiff, FinishImportRequest, Git, GitAvailability, GitError,
+    ImportCommitRequest, ImportOperation, ImportPlan, ImportResult, InspectRequest,
+    PrepareBranchRequest, PreparedBranch, PullRequest, PullResult, PushImportRequest, PushRequest,
+    PushResult, RepositoryInfo, RepositoryStatus, ReviewRequest, RollbackResult,
+    SwitchBranchRequest, SwitchResult, SyncStatus,
 };
 
 /// Executa trabalho bloqueante (processos do Git) em uma thread dedicada,
@@ -166,6 +173,92 @@ pub async fn push_branch(request: PushRequest) -> Result<PushResult, GitError> {
     blocking(move || {
         let git = Git::locate()?;
         core::push_branch(&git, &request)
+    })
+    .await
+}
+
+// ---------------------------------------------------------------------------
+// Fase 4 — importação de ZIP
+// ---------------------------------------------------------------------------
+
+/// Inspeciona o ZIP **sem extrair nada** e devolve o plano de importação (somente leitura).
+#[tauri::command]
+pub async fn inspect_zip(request: InspectRequest) -> Result<ImportPlan, GitError> {
+    blocking(move || {
+        let git = Git::locate()?;
+        core::inspect_zip(&git, &request)
+    })
+    .await
+}
+
+/// Cria a branch de trabalho a partir da branch-base e troca para ela (após recalcular o plano).
+#[tauri::command]
+pub async fn prepare_import_branch(
+    request: PrepareBranchRequest,
+) -> Result<PreparedBranch, GitError> {
+    blocking(move || {
+        let git = Git::locate()?;
+        core::prepare_import_branch(&git, &request)
+    })
+    .await
+}
+
+/// Grava os arquivos do plano confirmado (arquivos novos e substituições autorizadas).
+#[tauri::command]
+pub async fn apply_import(request: ApplyImportRequest) -> Result<ImportResult, GitError> {
+    blocking(move || {
+        let git = Git::locate()?;
+        core::apply_import(&git, &request)
+    })
+    .await
+}
+
+/// Desfaz uma importação aplicada (ou parcial) e ainda sem commit, preservando edições posteriores.
+#[tauri::command]
+pub async fn rollback_import(request: FinishImportRequest) -> Result<RollbackResult, GitError> {
+    blocking(move || {
+        let git = Git::locate()?;
+        core::rollback_import(&git, &request)
+    })
+    .await
+}
+
+/// Cria o commit da importação, restrito aos arquivos que pertencem à operação.
+#[tauri::command]
+pub async fn create_import_commit(request: ImportCommitRequest) -> Result<CommitResult, GitError> {
+    blocking(move || {
+        let git = Git::locate()?;
+        core::create_import_commit(&git, &request)
+    })
+    .await
+}
+
+/// Envia o commit da importação reutilizando o `push_branch` da Fase 3.
+#[tauri::command]
+pub async fn push_import_branch(request: PushImportRequest) -> Result<PushResult, GitError> {
+    blocking(move || {
+        let git = Git::locate()?;
+        core::push_import_branch(&git, &request)
+    })
+    .await
+}
+
+/// Operação de importação ainda não encerrada neste repositório (permite retomar).
+#[tauri::command]
+pub async fn find_import_operation(repo_path: String) -> Result<Option<ImportOperation>, GitError> {
+    blocking(move || {
+        let git = Git::locate()?;
+        core::find_import_operation(&git, &repo_path)
+    })
+    .await
+}
+
+/// Encerra a operação (após o commit ou a reversão) e remove temporários e backups.
+#[tauri::command]
+pub async fn finish_import(request: FinishImportRequest) -> Result<ImportOperation, GitError> {
+    blocking(move || {
+        let git = Git::locate()?;
+        core::finish_import(&git, &request)
     })
     .await
 }

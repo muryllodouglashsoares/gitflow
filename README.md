@@ -1,4 +1,4 @@
-# GitFlow Desktop (nome provisório) — Fase 3
+# GitFlow Desktop (nome provisório) — Fase 4
 
 Aplicativo desktop (Tauri + React + TypeScript + Rust) para **operar repositórios Git locais** sem digitar comandos.
 
@@ -7,7 +7,11 @@ Aplicativo desktop (Tauri + React + TypeScript + Rust) para **operar repositóri
   revisa o diff do que será registrado e cria o commit local, mostrando o resultado real do Git.
 - **Fase 3** (sincronização remota): diagnóstico de remotos/upstream (sincronizada, adiantada, atrasada, divergente) e
   as operações **fetch**, **pull** e **push** pela interface, com confirmação do destino exato, bloqueios de segurança e
-  o resultado real do Git. **Não há** ZIP, merge manual, pull requests nem armazenamento de credenciais (fases 4 a 5).
+  o resultado real do Git.
+- **Fase 4** (importação de ZIP): importa uma atualização de código a partir de um `.zip` por um fluxo revisável — inspeção
+  sem extrair, prévia do plano, branch de trabalho dedicada, gravação controlada, diff real, commit só dos arquivos da
+  importação e push em etapa separada (reaproveitando o push da Fase 3). **Não há** merge manual, pull requests nem
+  armazenamento de credenciais (fase 5 em diante).
 
 ## Início rápido (Windows)
 
@@ -225,6 +229,144 @@ a mensagem é genérica com "Detalhes técnicos" higienizados (URLs sem credenci
    estado vira "Remoto não verificável". Para autenticação, use uma URL HTTPS privada sem credenciais salvas: o erro orienta a
    configurar o Git Credential Manager ou SSH fora do aplicativo e nenhuma senha é pedida na interface.
 
+## Fase 4 — Importação de ZIP
+
+Aba **Importar ZIP**: transforma um ZIP **não confiável** em um plano de alterações validado, revisável e restrito ao
+repositório aberto. Nenhuma etapa avança sozinha: não existe um botão que faça tudo de ponta a ponta.
+
+### Fluxo
+
+1. **Seleção** — escolha o `.zip` (seletor nativo), confira o repositório de destino (o repositório aberto) e a
+   **branch-base** (por padrão, a branch ativa).
+2. **Inspeção** (somente leitura) — o ZIP é lido **sem extrair nada**. A tela mostra novos, substituições, idênticos,
+   bloqueados e ignorados, com tamanho e SHA-256 do pacote. Se o ZIP tiver uma pasta-raiz, o aplicativo **sugere** a pasta
+   do pacote, mas não remove nenhum nível sozinho: você escolhe em “Pasta do pacote” (a inspeção é refeita na hora).
+   Arquivos ocultos legítimos (`.gitignore`, `.github/…`) são preservados.
+3. **Plano** — cada arquivo é comparado (SHA-256) com o conteúdo atual: *Novo*, *Substitui*, *Idêntico* (nunca é
+   regravado) ou *Bloqueado* (com o motivo). Você pode **desmarcar** arquivos para não importá-los. Substituições exigem uma
+   confirmação explícita, com a lista dos arquivos afetados.
+4. **Branch de trabalho** — informe (ou aceite a sugestão editável `importacao/<zip>-AAAAMMDD`) o nome da nova branch.
+   Ela é criada a partir da base e ativada **antes** de qualquer gravação. Uma única confirmação cobre o plano e a branch,
+   e o resumo mostra repositório, base → nova branch e quantos arquivos serão gravados.
+5. **Importação** — o backend recalcula o plano e só grava se ele ainda for **idêntico** ao confirmado. Antes de tocar o
+   repositório, os arquivos são extraídos para uma área privada, conferidos contra o hash do plano e, no caso de
+   substituições, copiados para um backup. Depois são aplicados um a um.
+6. **Diff e commit** — a tela reaproveita a seleção, a revisão de diff e a confirmação da Fase 2, mas alimentadas **só**
+   com os arquivos gravados pela importação. O backend também recusa qualquer arquivo que não pertença à operação.
+   Arquivos fora da importação aparecem apenas como um aviso e não entram no commit.
+7. **Push** — etapa separada, com confirmação própria que mostra a branch local, `remoto/branch`, o commit e quantos
+   commits serão enviados. Usa o `push_branch` da Fase 3 (sem `--force`, sem criar upstream, só a branch de trabalho).
+   Destino `main`/`master` exige uma caixa extra. Você também pode **concluir sem enviar**.
+8. **Relatório** — pacote, branch, arquivos importados, commit e se houve envio. O “Registro da operação” lista cada
+   etapa (início, resultado e detalhe).
+
+A importação **nunca exclui** arquivos: o que não está no ZIP permanece no repositório.
+
+### Segurança do ZIP
+
+O arquivo é entrada não confiável; o backend (Rust) valida tudo, e a interface não é uma fronteira de confiança.
+
+- **Caminhos** recusados: absolutos, UNC, com unidade (`C:`), com `..`/`.` ou componentes vazios, com barra invertida
+  (`\`, ambígua entre sistemas), caracteres de controle ou de direção de texto Unicode, nomes inválidos/reservados do
+  Windows (`CON`, `NUL`, `a:b`, `x?`, terminados em ponto/espaço…), a pasta `.git` e caminhos longos demais (limite de
+  240 bytes no pacote e `MAX_PATH` do Windows no destino).
+- **Colisões**: entradas **duplicadas** (lidas direto do diretório central, pois o crate `zip` as colapsa em silêncio),
+  nomes que colidem por maiúsculas/minúsculas ou por Unicode equivalente (NFC) e arquivo × pasta com o mesmo caminho.
+- **Tipos**: links simbólicos, dispositivos e outras entradas especiais são **bloqueados** (nunca materializados); entradas
+  criptografadas e métodos de compressão não suportados também.
+- **Limites** (`ImportLimits`, em `git-core/src/import/mod.rs`): ZIP de até 1 GiB, 5.000 entradas, 50 MiB por arquivo,
+  500 MiB descomprimidos no total e taxa de compressão máxima de 200× (para arquivos acima de 1 MiB). Os tamanhos são
+  conferidos contra o conteúdo **realmente descomprimido**, não só contra o cabeçalho. **ZIP64 não é suportado** (os limites
+  o tornam desnecessário e um ZIP64 forjado poderia esconder entradas).
+- **Gravação**: cada caminho é revalidado e montado por componentes (nunca por prefixo de texto); nenhum componente
+  existente pode ser link simbólico; arquivos ignorados pelo `.gitignore` são bloqueados (o Git não os veria); nada é
+  sobrescrito fora do plano; antes de cada substituição o hash do arquivo atual é conferido de novo.
+- Nenhum conteúdo do ZIP é executado.
+
+Qualquer entrada bloqueada impede a importação do pacote inteiro, com o caminho e o motivo.
+
+### Estado do repositório e falhas
+
+O plano só pode ser aplicado com **árvore limpa** (sem alterações, sem arquivos não rastreados), sem merge/rebase em
+andamento, sem conflitos, sem HEAD desanexado e com a branch ativa igual à branch-base — alterações preexistentes nunca
+são misturadas, escondidas nem descartadas. Se a base escolhida não é a branch ativa, o plano é bloqueado e a tela pede
+que você troque para ela antes (aba Branches).
+
+Cada etapa é uma transição de uma **máquina de estados** (`src/lib/importFlow.ts`): eventos fora de ordem, cliques repetidos
+e respostas de outro repositório ou de uma tentativa antiga são ignorados. Em falha, o fluxo para e mostra a etapa, o que
+já foi concluído e o que verificar:
+
+| Situação | Resultado |
+| --- | --- |
+| ZIP inválido, corrompido, vazio ou bloqueado | Nada é criado; mensagem com o motivo |
+| Falha ao criar/ativar a branch | Nenhum arquivo gravado; orienta conferir a aba Branches |
+| Plano/ZIP/destino mudou depois da prévia | Recusado (“plano desatualizado”), nada gravado; volte à base e inspecione de novo |
+| Falha **no meio** da gravação | Estado **parcial** com o que foi gravado; commit e push ficam bloqueados; ofereça-se **Desfazer** |
+| Commit falha | Seleção e mensagem preservadas; nada é commitado |
+| Push rejeitado/sem upstream/timeout | O commit local é preservado; a operação continua em “commit concluído”; nada é repetido sozinho; timeout = “não confirmado” |
+
+**Desfazer** (antes do commit) restaura as substituições a partir do backup e remove os arquivos novos **somente se ainda
+estiverem exatamente como foram importados**; o que você editou depois é preservado e listado. Se a branch de trabalho já
+recebeu commits (por exemplo, você commitou pela aba Alterações), o desfazer é recusado: aí o caminho é `git revert`.
+
+**Retomada**: a operação fica registrada em `.git/gitflow-import/<id>/journal.json` (sem segredos nem conteúdo de
+arquivos; backups e temporários ficam ao lado). Ao abrir o repositório, uma operação pendente é retomada na etapa correta
+(parcial → desfazer; aplicada → revisão/commit; commitada → push) **sem repetir etapas** e sem criar um segundo commit.
+“Concluir”/“Desfazer” bem-sucedidos limpam os temporários e backups.
+
+### Limitações conhecidas
+
+- **Push exige upstream já configurado.** A branch de trabalho é nova e não tem upstream; o aplicativo não o inventa nem
+  o define. Para publicar pelo app, configure antes `git push -u origin <branch-de-trabalho>` no terminal (por exemplo,
+  logo depois de criada) ou envie depois do commit pelo terminal. Sem upstream, o app explica o motivo e preserva o commit.
+- A comparação “idêntico × substitui” é **byte a byte**: diferenças de fim de linha (CRLF × LF) contam como diferença.
+- Nomes de arquivos com `\` (alguns ZIPs gerados no Windows PowerShell 5.1) são bloqueados; gere o pacote novamente
+  (por exemplo, com `tar -a -c -f` ou o PowerShell 7).
+- Não há cancelamento durante gravação, commit ou push (só da inspeção); não há porcentagem de progresso (o indicador é
+  indeterminado). Não há checagem prévia de espaço em disco: um erro de escrita durante a extração ocorre **antes** de tocar
+  o repositório.
+- Permissões de arquivo não são definidas (substituições preservam as do arquivo existente em sistemas Unix).
+- Se o aplicativo for encerrado à força no instante de uma gravação, pode sobrar um `.gitflow-import-*.tmp` ao lado do
+  destino; a operação é retomada como parcial e o **Desfazer** cuida do restante.
+- Ao desfazer, pastas que ficaram vazias no caminho dos arquivos removidos também são removidas.
+- O frontend não tem testes de interação com componentes React (o Vitest do projeto roda em Node, sem DOM): a lógica do
+  fluxo, os bloqueios e o descarte de respostas obsoletas estão em funções puras testadas, e há um teste de renderização
+  de todas as etapas da tela; cliques, foco e o seletor nativo de arquivos só são validados pelo roteiro manual abaixo.
+
+### Testes da Fase 4
+
+- Rust: `git-core/tests/phase4.rs` (42 testes, repositórios e remotos bare temporários, ZIPs montados em memória e
+  adulterados por patch de bytes) e testes unitários em `git-core/src/import/`. Cobrem: ZIP válido/corrompido/vazio/não-ZIP,
+  duplicatas, ZIP64 forjado, traversal e caminhos absolutos, separadores alternativos, nomes reservados, colisões, links
+  simbólicos, limites de tamanho/quantidade/compressão, pasta-raiz, `.gitignore`, destino com link simbólico, alterações
+  locais, merge em andamento, branch inválida/existente/igual à base, plano e ZIP desatualizados, sobrescrita sem confirmação,
+  exclusões, ausência de exclusão de arquivos, falha no meio da gravação, desfazer (inclusive com edições do usuário e após
+  commit externo), commit isolado e sem duplicação, push confirmado/rejeitado/sem upstream/destino errado, trava de
+  concorrência, identificadores de operação malformados e o **contrato JSON** com os tipos TypeScript.
+- Frontend: `src/lib/importFlow.test.ts` (transições permitidas, ordem das etapas, respostas obsoletas, cliques repetidos,
+  cancelamento, falhas, retomada, confirmações, exclusões, destino do push, nome da branch) e
+  `src/components/import/ImportView.test.tsx` (renderização no servidor de cada etapa, sem exceções nem valores quebrados).
+- `npm test`, `npm run test:rust`, `npm run typecheck` e `npm run build` fazem parte da verificação.
+
+### Validação manual da Fase 4 (Windows, repositório descartável)
+
+1. Crie `C:\teste\meu` com `git init`, identidade configurada e um commit com `src\app.txt` e `keep.txt`. Para o push, crie
+   também `git init --bare C:\teste\remoto.git`, `git remote add origin C:\teste\remoto.git` e `git push -u origin main`.
+2. Monte `C:\teste\pacote.zip` com `novo.txt`, `src\app.txt` (conteúdo diferente) e um arquivo idêntico a um existente.
+   Abra `meu` → **Importar ZIP** → *Escolher ZIP…* → *Inspecionar ZIP*. Confira: 1 novo, 1 substitui, 1 idêntico, nada gravado.
+3. Marque a confirmação de sobrescrita e a do plano; troque o nome da branch para um inválido (`a b`) e veja o bloqueio;
+   volte ao nome válido → *Criar branch e importar*. Confira no terminal: `git branch` (nova branch ativa),
+   `git status` (só os arquivos do plano) e que `keep.txt` continua lá.
+4. **Commit**: marque os arquivos, *Revisar e commitar…*, confira o diff real, escreva a mensagem, confirme.
+   Edite `keep.txt` no editor e veja que ele não aparece como arquivo da importação nem entra no commit.
+5. **Push**: sem upstream, a tela explica e não envia. No terminal: `git push -u origin <branch>`; volte ao app (o diagnóstico
+   atualiza) → *Enviar ao remoto* exige a confirmação; confira `git -C C:\teste\remoto.git log <branch>`.
+6. **Bloqueios**: um ZIP com `..\fora.txt`, `con.txt` ou dois arquivos que só diferem em maiúsculas é bloqueado, com o
+   caminho e o motivo, e nada é gravado. Com um arquivo modificado no repositório, o plano é bloqueado listando o motivo.
+7. **Desfazer**: repita a importação, pare antes do commit e use *Desfazer a importação*; confira `git status` limpo e
+   `src\app.txt` restaurado. Edite um arquivo importado antes de desfazer: ele é preservado e listado.
+8. **Retomada**: importe, feche o aplicativo antes de commitar e reabra o repositório: a operação volta na etapa de revisão.
+
 ## Validação manual da Fase 2
 
 1. `npm run tauri:dev`, abra um repositório de teste (crie um com `git init` numa pasta descartável).
@@ -239,6 +381,7 @@ a mensagem é genérica com "Detalhes técnicos" higienizados (URLs sem credenci
 
 ## Fora do escopo (próximas fases)
 
-merge manual entre branches, importação de ZIP, resolução de conflitos, pull requests, sistema próprio de autenticação,
+merge manual entre branches e proteção da `main` (Fase 5), resolução de conflitos, pull requests, sistema próprio de
+autenticação, exclusão de arquivos por importação (se vier a existir, será um fluxo separado, com prévia e confirmação),
 instalador/publicação.
 A navegação lateral (`NavId`) e `App.tsx` já têm o ponto de extensão.

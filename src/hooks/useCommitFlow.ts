@@ -8,7 +8,7 @@ import {
 } from "../lib/commit";
 import type { Selection } from "../lib/changes";
 import { errorFrom, gitService } from "../services/gitService";
-import type { CommitResult, CommitReview, GitError } from "../types/git";
+import type { CommitRequest, CommitResult, CommitReview, GitError } from "../types/git";
 import type { RunExclusive, StatusState } from "./useRepositoryWorkspace";
 
 export type CommitStep = "select" | "review";
@@ -27,6 +27,11 @@ interface Params {
   runExclusive: RunExclusive;
   /** Relê o status do repositório. */
   refresh: () => void;
+  /**
+   * Função que cria o commit. Por padrão é o `create_commit` da Fase 2. A importação de ZIP
+   * injeta a versão restrita aos arquivos da operação (`create_import_commit`).
+   */
+  createCommit?: (request: CommitRequest) => Promise<CommitResult>;
 }
 
 /**
@@ -40,8 +45,13 @@ interface Params {
  * - em falha, seleção e mensagem do usuário são preservadas;
  * - o sucesso só é exibido com o resultado real devolvido pelo Git.
  */
-export function useCommitFlow({ repoPath, status, runExclusive, refresh }: Params) {
+export function useCommitFlow({ repoPath, status, runExclusive, refresh, createCommit }: Params) {
   const files = status.data?.files ?? null;
+  // Sempre a função mais recente, sem recriar `submit` a cada render.
+  const createCommitRef = useRef(createCommit);
+  useEffect(() => {
+    createCommitRef.current = createCommit;
+  }, [createCommit]);
 
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [step, setStep] = useState<CommitStep>("select");
@@ -220,7 +230,7 @@ export function useCommitFlow({ repoPath, status, runExclusive, refresh }: Param
 
     const paths = data.files.map((f) => f.path);
     const outcome = await runExclusive("commit", () =>
-      gitService.createCommit({
+      (createCommitRef.current ?? gitService.createCommit)({
         repoPath,
         files: paths,
         message,

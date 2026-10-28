@@ -26,6 +26,7 @@ const KNOWN_CODES: ReadonlySet<string> = new Set<ErrorCode>([
   "REMOTE_BRANCH_MISSING",
   "PUSH_REJECTED",
   "MERGE_CONFLICT",
+  "INVALID_ARCHIVE",
   "FRONTEND",
 ]);
 

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-find-import-operation"
+description = "Enables the find_import_operation command without any pre-configured scope."
+commands.allow = ["find_import_operation"]
+
+[[permission]]
+identifier = "deny-find-import-operation"
+description = "Denies the find_import_operation command without any pre-configured scope."
+commands.deny = ["find_import_operation"]

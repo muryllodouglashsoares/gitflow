@@ -6,6 +6,7 @@ import { CommitForm } from "./components/commit/CommitForm";
 import { CommitResultBanner } from "./components/commit/CommitResultBanner";
 import { ReviewFileList } from "./components/commit/ReviewFileList";
 import { DiffViewer } from "./components/diff/DiffViewer";
+import { ImportView } from "./components/import/ImportView";
 import { SyncView } from "./components/sync/SyncView";
 import { RepositoryHeader } from "./components/layout/RepositoryHeader";
 import { Sidebar, type NavId } from "./components/layout/Sidebar";
@@ -16,6 +17,7 @@ import { useCommitFlow } from "./hooks/useCommitFlow";
 import { useFileDiff } from "./hooks/useFileDiff";
 import { useRepositoryWorkspace } from "./hooks/useRepositoryWorkspace";
 import { useSync } from "./hooks/useSync";
+import { useZipImport } from "./hooks/useZipImport";
 
 export default function App() {
   const workspace = useRepositoryWorkspace();
@@ -40,10 +42,21 @@ export default function App() {
     reviewing ? commit.reviewVersion : status.updatedAt,
   );
 
-  const branches = useBranches(repoPath, status.updatedAt, nav === "branches");
+  // A lista de branches também alimenta a importação de ZIP (base e nome da branch de trabalho).
+  const branches = useBranches(repoPath, status.updatedAt, nav === "branches" || nav === "import");
   const branchActions = useBranchActions(repoPath, workspace.runExclusive, workspace.refresh);
   // Fase 3: diagnóstico de sincronização (sem rede) sempre disponível; fetch/pull/push sob demanda.
   const sync = useSync(repoPath, status.updatedAt, workspace.runExclusive, workspace.refresh);
+
+  // Fase 4: importação de ZIP. O estado do fluxo vive aqui para sobreviver à troca de aba.
+  const zipImport = useZipImport({
+    repoPath,
+    status,
+    branchList: branches.branches.data,
+    syncStatus: sync.diagnosis.data,
+    runExclusive: workspace.runExclusive,
+    refresh: workspace.refresh,
+  });
 
   const reviewFile = commit.review.data?.files.find((f) => f.path === commit.focusPath);
   const reviewBanner = reviewFile
@@ -84,7 +97,16 @@ export default function App() {
               onOpenSync={() => setNav("sync")}
             />
 
-            {nav === "sync" ? (
+            {nav === "import" ? (
+              <ImportView
+                repoPath={repo.path}
+                ctl={zipImport}
+                branches={branches.branches.data}
+                locked={workspace.mutating !== null && !zipImport.running}
+                syncStatus={sync.diagnosis.data}
+                onRefresh={workspace.refresh}
+              />
+            ) : nav === "sync" ? (
               <SyncView status={status.data} sync={sync} locked={workspace.mutating !== null} />
             ) : nav === "branches" ? (
               <BranchesView

@@ -7,7 +7,15 @@ rust-version = "1.80"
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# Fase 4 (importação de ZIP): leitura de ZIP sem extrair, hash de integridade e normalização
+# Unicode para detectar nomes equivalentes. `default-features = false` evita formatos e
+# criptografia que não são usados (somente armazenado + deflate). O feature `deflate` do crate
+# `zip` inclui também `zopfli` (compressão), que a importação não usa mas não dá para excluir sem
+# trocar o backend por um que exija C (zlib). O lock já exigia Rust 1.90 por causa do Tauri.
+zip = { version = "2", default-features = false, features = ["deflate"] }
+sha2 = "0.10"
+unicode-normalization = "0.1"
 
 [dev-dependencies]
 tempfile = "3"
-serde_json = "1"

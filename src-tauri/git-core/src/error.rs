@@ -58,6 +58,8 @@ pub enum ErrorCode {
     PushRejected,
     /// A integração do pull gerou conflitos e o repositório ficou em estado de integração. Fase 3.
     MergeConflict,
+    /// O ZIP não é válido, está corrompido ou excede os limites de segurança. Fase 4.
+    InvalidArchive,
 }
 
 #[derive(Debug, Clone, Serialize)]

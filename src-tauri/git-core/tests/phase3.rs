@@ -34,7 +34,7 @@ fn git_cmd(dir: &Path, args: &[&str]) -> std::process::Output {
         .expect("git precisa estar instalado para os testes")
 }
 
-fn git(dir: &Path, args: &[&str]) {
+fn run_git(dir: &Path, args: &[&str]) {
     let out = git_cmd(dir, args);
     assert!(
         out.status.success(),
@@ -51,15 +51,15 @@ fn git_out(dir: &Path, args: &[&str]) -> String {
 }
 
 fn configure_identity(dir: &Path) {
-    git(dir, &["config", "user.name", "Teste"]);
-    git(dir, &["config", "user.email", "teste@example.com"]);
-    git(dir, &["config", "commit.gpgsign", "false"]);
+    run_git(dir, &["config", "user.name", "Teste"]);
+    run_git(dir, &["config", "user.email", "teste@example.com"]);
+    run_git(dir, &["config", "commit.gpgsign", "false"]);
 }
 
 fn new_repo() -> TempDir {
     isolate_git_config();
     let dir = tempfile::Builder::new().prefix("gitflow-fase3-").tempdir().unwrap();
-    git(dir.path(), &["init", "-q", "-b", "main"]);
+    run_git(dir.path(), &["init", "-q", "-b", "main"]);
     configure_identity(dir.path());
     dir
 }
@@ -67,7 +67,7 @@ fn new_repo() -> TempDir {
 fn bare_remote() -> TempDir {
     isolate_git_config();
     let dir = tempfile::Builder::new().prefix("gitflow-fase3-remoto-").tempdir().unwrap();
-    git(dir.path(), &["init", "-q", "--bare", "-b", "main"]);
+    run_git(dir.path(), &["init", "-q", "--bare", "-b", "main"]);
     dir
 }
 
@@ -85,14 +85,14 @@ fn read(dir: &Path, rel: &str) -> String {
 
 fn commit_file(dir: &Path, rel: &str, content: &str, message: &str) {
     write(dir, rel, content);
-    git(dir, &["add", "--", rel]);
-    git(dir, &["commit", "-q", "-m", message]);
+    run_git(dir, &["add", "--", rel]);
+    run_git(dir, &["commit", "-q", "-m", message]);
 }
 
 fn clone_of(remote: &Path) -> TempDir {
     isolate_git_config();
     let dir = tempfile::Builder::new().prefix("gitflow-fase3-clone-").tempdir().unwrap();
-    git(dir.path(), &["clone", "-q", remote.to_str().unwrap(), "."]);
+    run_git(dir.path(), &["clone", "-q", remote.to_str().unwrap(), "."]);
     configure_identity(dir.path());
     dir
 }
@@ -107,16 +107,16 @@ fn pair() -> Pair {
     let remote = bare_remote();
     let local = new_repo();
     commit_file(local.path(), "base.txt", "base\n", "base");
-    git(local.path(), &["remote", "add", "origin", remote.path().to_str().unwrap()]);
-    git(local.path(), &["push", "-q", "-u", "origin", "main"]);
+    run_git(local.path(), &["remote", "add", "origin", remote.path().to_str().unwrap()]);
+    run_git(local.path(), &["push", "-q", "-u", "origin", "main"]);
     Pair { remote, local }
 }
 
 /// Igual a `pair`, mas com a branch de trabalho `feature` (não protegida) já publicada.
 fn feature_pair() -> Pair {
     let pair = pair();
-    git(pair.local.path(), &["checkout", "-q", "-b", "feature"]);
-    git(pair.local.path(), &["push", "-q", "-u", "origin", "feature"]);
+    run_git(pair.local.path(), &["checkout", "-q", "-b", "feature"]);
+    run_git(pair.local.path(), &["push", "-q", "-u", "origin", "feature"]);
     pair
 }
 
@@ -184,7 +184,7 @@ fn remote_without_upstream_is_distinguished_and_blocks_pull_and_push() {
     let remote = bare_remote();
     let dir = new_repo();
     commit_file(dir.path(), "a.txt", "1\n", "c1");
-    git(dir.path(), &["remote", "add", "origin", remote.path().to_str().unwrap()]);
+    run_git(dir.path(), &["remote", "add", "origin", remote.path().to_str().unwrap()]);
     let path = repo_path(&git, &dir);
 
     let sync = get_sync_status(&git, &path).unwrap();
@@ -207,9 +207,9 @@ fn upstream_configured_but_never_fetched_is_not_reported_as_synced() {
     let remote = bare_remote();
     let dir = new_repo();
     commit_file(dir.path(), "a.txt", "1\n", "c1");
-    git(dir.path(), &["remote", "add", "origin", remote.path().to_str().unwrap()]);
-    git(dir.path(), &["config", "branch.main.remote", "origin"]);
-    git(dir.path(), &["config", "branch.main.merge", "refs/heads/main"]);
+    run_git(dir.path(), &["remote", "add", "origin", remote.path().to_str().unwrap()]);
+    run_git(dir.path(), &["config", "branch.main.remote", "origin"]);
+    run_git(dir.path(), &["config", "branch.main.merge", "refs/heads/main"]);
     let path = repo_path(&git, &dir);
 
     let sync = get_sync_status(&git, &path).unwrap();
@@ -245,7 +245,7 @@ fn synced_ahead_behind_and_diverged_states_follow_the_real_refs() {
     // Outra pessoa envia ao remoto: SEM fetch o aplicativo ainda não sabe (não inventa).
     let other = clone_of(pair.remote.path());
     commit_file(other.path(), "remoto.txt", "r\n", "remoto");
-    git(other.path(), &["push", "-q", "origin", "main"]);
+    run_git(other.path(), &["push", "-q", "origin", "main"]);
     assert_eq!(get_sync_status(&git, &path).unwrap().state, SyncState::Ahead);
 
     // Depois do fetch, a divergência aparece.
@@ -263,7 +263,7 @@ fn behind_state_appears_only_after_fetch() {
 
     let other = clone_of(pair.remote.path());
     commit_file(other.path(), "novo.txt", "n\n", "novo");
-    git(other.path(), &["push", "-q", "origin", "main"]);
+    run_git(other.path(), &["push", "-q", "origin", "main"]);
 
     assert_eq!(get_sync_status(&git, &path).unwrap().state, SyncState::Synced);
     let result = fetch_remote(&git, &fetch_req(&path, "origin")).unwrap();
@@ -278,7 +278,7 @@ fn credentials_in_remote_urls_are_never_exposed() {
     let git = git_handle();
     let dir = new_repo();
     commit_file(dir.path(), "a.txt", "1\n", "c1");
-    git(dir.path(), &["remote", "add", "origin", "https://usuario:segredo123@127.0.0.1:1/x.git"]);
+    run_git(dir.path(), &["remote", "add", "origin", "https://usuario:segredo123@127.0.0.1:1/x.git"]);
     let path = repo_path(&git, &dir);
 
     let sync = get_sync_status(&git, &path).unwrap();
@@ -306,7 +306,7 @@ fn fetch_updates_remote_refs_without_touching_the_work_tree_or_branch() {
 
     let other = clone_of(pair.remote.path());
     commit_file(other.path(), "novo.txt", "n\n", "novo");
-    git(other.path(), &["push", "-q", "origin", "main"]);
+    run_git(other.path(), &["push", "-q", "origin", "main"]);
 
     let result = fetch_remote(&git, &fetch_req(&path, "origin")).unwrap();
     assert_eq!(result.remote, "origin");
@@ -338,13 +338,13 @@ fn fetch_failure_is_reported_and_a_retry_works_after_fixing_the_remote() {
     let path = repo_path(&git, &pair.local);
     let good_url = pair.remote.path().to_str().unwrap().to_string();
 
-    git(pair.local.path(), &["remote", "set-url", "origin", "/caminho/que/nao/existe/remoto.git"]);
+    run_git(pair.local.path(), &["remote", "set-url", "origin", "/caminho/que/nao/existe/remoto.git"]);
     let err = fetch_remote(&git, &fetch_req(&path, "origin")).unwrap_err();
     assert_eq!(err.code, ErrorCode::RemoteNotFound, "{err:?}");
     assert!(err.details.is_some());
 
     // A trava foi liberada e uma nova tentativa funciona.
-    git(pair.local.path(), &["remote", "set-url", "origin", &good_url]);
+    run_git(pair.local.path(), &["remote", "set-url", "origin", &good_url]);
     let ok = fetch_remote(&git, &fetch_req(&path, "origin")).unwrap();
     assert_eq!(ok.sync.state, SyncState::Synced);
 }
@@ -383,7 +383,7 @@ fn pull_fast_forwards_and_reports_the_real_outcome() {
 
     let other = clone_of(pair.remote.path());
     commit_file(other.path(), "novo.txt", "conteudo remoto\n", "novo");
-    git(other.path(), &["push", "-q", "origin", "main"]);
+    run_git(other.path(), &["push", "-q", "origin", "main"]);
 
     let result = pull_branch(&git, &pull_req(&path, "main", "main")).unwrap();
     assert_eq!(result.outcome, PullOutcome::Updated);
@@ -400,7 +400,7 @@ fn pull_is_blocked_by_local_changes_and_never_discards_them() {
     let path = repo_path(&git, &pair.local);
     let other = clone_of(pair.remote.path());
     commit_file(other.path(), "novo.txt", "n\n", "novo");
-    git(other.path(), &["push", "-q", "origin", "main"]);
+    run_git(other.path(), &["push", "-q", "origin", "main"]);
 
     // Não preparada.
     write(pair.local.path(), "base.txt", "editado localmente\n");
@@ -410,7 +410,7 @@ fn pull_is_blocked_by_local_changes_and_never_discards_them() {
     assert_eq!(read(pair.local.path(), "base.txt"), "editado localmente\n");
 
     // Preparada.
-    git(pair.local.path(), &["add", "base.txt"]);
+    run_git(pair.local.path(), &["add", "base.txt"]);
     let err = pull_branch(&git, &pull_req(&path, "main", "main")).unwrap_err();
     assert_eq!(err.code, ErrorCode::OperationBlocked);
     assert_eq!(git_out(pair.local.path(), &["diff", "--cached", "--name-only"]), "base.txt");
@@ -427,7 +427,7 @@ fn pull_does_not_block_on_unrelated_untracked_files_but_never_overwrites_them() 
     let path = repo_path(&git, &pair.local);
     let other = clone_of(pair.remote.path());
     commit_file(other.path(), "novo.txt", "remoto\n", "novo");
-    git(other.path(), &["push", "-q", "origin", "main"]);
+    run_git(other.path(), &["push", "-q", "origin", "main"]);
 
     // Arquivo não rastreado e sem relação: o pull funciona.
     write(pair.local.path(), "anotacoes.txt", "minhas notas\n");
@@ -437,7 +437,7 @@ fn pull_does_not_block_on_unrelated_untracked_files_but_never_overwrites_them() 
 
     // Arquivo não rastreado que seria sobrescrito: o Git recusa e o conteúdo fica intacto.
     commit_file(other.path(), "colide.txt", "do remoto\n", "colide");
-    git(other.path(), &["push", "-q", "origin", "main"]);
+    run_git(other.path(), &["push", "-q", "origin", "main"]);
     write(pair.local.path(), "colide.txt", "meu arquivo local\n");
     let err = pull_branch(&git, &pull_req(&path, "main", "main")).unwrap_err();
     assert_eq!(err.code, ErrorCode::OperationBlocked, "{err:?}");
@@ -452,7 +452,7 @@ fn divergent_pull_without_configured_strategy_is_blocked_before_running_git() {
     commit_file(pair.local.path(), "local.txt", "l\n", "local");
     let other = clone_of(pair.remote.path());
     commit_file(other.path(), "remoto.txt", "r\n", "remoto");
-    git(other.path(), &["push", "-q", "origin", "main"]);
+    run_git(other.path(), &["push", "-q", "origin", "main"]);
     fetch_remote(&git, &fetch_req(&path, "origin")).unwrap();
 
     let sync = get_sync_status(&git, &path).unwrap();
@@ -471,12 +471,12 @@ fn divergent_pull_without_configured_strategy_is_blocked_before_running_git() {
 fn divergent_pull_with_merge_strategy_integrates_without_conflicts() {
     let git = git_handle();
     let pair = pair();
-    git(pair.local.path(), &["config", "pull.rebase", "false"]);
+    run_git(pair.local.path(), &["config", "pull.rebase", "false"]);
     let path = repo_path(&git, &pair.local);
     commit_file(pair.local.path(), "local.txt", "l\n", "local");
     let other = clone_of(pair.remote.path());
     commit_file(other.path(), "remoto.txt", "r\n", "remoto");
-    git(other.path(), &["push", "-q", "origin", "main"]);
+    run_git(other.path(), &["push", "-q", "origin", "main"]);
 
     let result = pull_branch(&git, &pull_req(&path, "main", "main")).unwrap();
     assert_eq!(result.outcome, PullOutcome::Updated);
@@ -490,13 +490,13 @@ fn divergent_pull_with_merge_strategy_integrates_without_conflicts() {
 fn pull_conflict_is_reported_not_resolved_and_leaves_the_repository_for_manual_resolution() {
     let git = git_handle();
     let pair = pair();
-    git(pair.local.path(), &["config", "pull.rebase", "false"]);
+    run_git(pair.local.path(), &["config", "pull.rebase", "false"]);
     let path = repo_path(&git, &pair.local);
 
     commit_file(pair.local.path(), "base.txt", "versao local\n", "local");
     let other = clone_of(pair.remote.path());
     commit_file(other.path(), "base.txt", "versao remota\n", "remoto");
-    git(other.path(), &["push", "-q", "origin", "main"]);
+    run_git(other.path(), &["push", "-q", "origin", "main"]);
 
     let err = pull_branch(&git, &pull_req(&path, "main", "main")).unwrap_err();
     assert_eq!(err.code, ErrorCode::MergeConflict, "{err:?}");
@@ -544,7 +544,7 @@ fn push_sends_only_the_current_branch_to_its_upstream_and_confirms_the_result() 
 
     commit_file(pair.local.path(), "f.txt", "f\n", "feature work");
     // Uma segunda branch local, que NÃO deve ser enviada.
-    git(pair.local.path(), &["branch", "nao-enviar"]);
+    run_git(pair.local.path(), &["branch", "nao-enviar"]);
     let local_head = git_out(pair.local.path(), &["rev-parse", "HEAD"]);
 
     let result = push_branch(&git, &push_req(&path, "feature", "feature", false)).unwrap();
@@ -582,9 +582,9 @@ fn rejected_push_is_reported_as_failure_and_the_remote_is_left_intact() {
 
     // Outra pessoa envia antes; o aplicativo ainda não sabe (sem fetch), então o Git é quem recusa.
     let other = clone_of(pair.remote.path());
-    git(other.path(), &["checkout", "-q", "feature"]);
+    run_git(other.path(), &["checkout", "-q", "feature"]);
     commit_file(other.path(), "dela.txt", "dela\n", "commit dela");
-    git(other.path(), &["push", "-q", "origin", "feature"]);
+    run_git(other.path(), &["push", "-q", "origin", "feature"]);
     let remote_head = git_out(pair.remote.path(), &["rev-parse", "feature"]);
 
     let err = push_branch(&git, &push_req(&path, "feature", "feature", false)).unwrap_err();
@@ -628,16 +628,16 @@ fn push_is_blocked_when_behind_or_without_a_branch() {
     let path = repo_path(&git, &pair.local);
 
     let other = clone_of(pair.remote.path());
-    git(other.path(), &["checkout", "-q", "feature"]);
+    run_git(other.path(), &["checkout", "-q", "feature"]);
     commit_file(other.path(), "dela.txt", "dela\n", "dela");
-    git(other.path(), &["push", "-q", "origin", "feature"]);
+    run_git(other.path(), &["push", "-q", "origin", "feature"]);
     fetch_remote(&git, &fetch_req(&path, "origin")).unwrap();
 
     let err = push_branch(&git, &push_req(&path, "feature", "feature", false)).unwrap_err();
     assert_eq!(err.code, ErrorCode::OperationBlocked);
 
     // HEAD desanexado: sem destino inequívoco.
-    git(pair.local.path(), &["checkout", "-q", "--detach"]);
+    run_git(pair.local.path(), &["checkout", "-q", "--detach"]);
     let sync = get_sync_status(&git, &path).unwrap();
     assert_eq!(sync.state, SyncState::DetachedHead);
     let err = push_branch(&git, &push_req(&path, "feature", "feature", false)).unwrap_err();
@@ -658,12 +658,12 @@ fn whole_flow_works_with_spaces_and_accents_in_paths() {
     let local = root.path().join("repositório local");
     fs::create_dir_all(&remote).unwrap();
     fs::create_dir_all(&local).unwrap();
-    git(&remote, &["init", "-q", "--bare", "-b", "main"]);
-    git(&local, &["init", "-q", "-b", "main"]);
+    run_git(&remote, &["init", "-q", "--bare", "-b", "main"]);
+    run_git(&local, &["init", "-q", "-b", "main"]);
     configure_identity(&local);
     commit_file(&local, "base.txt", "b\n", "base");
-    git(&local, &["remote", "add", "origin", remote.to_str().unwrap()]);
-    git(&local, &["push", "-q", "-u", "origin", "main"]);
+    run_git(&local, &["remote", "add", "origin", remote.to_str().unwrap()]);
+    run_git(&local, &["push", "-q", "-u", "origin", "main"]);
     let path = open_repository(&git, local.to_str().unwrap()).unwrap().path;
 
     commit_file(&local, "ação.txt", "ok\n", "ação");
@@ -672,10 +672,10 @@ fn whole_flow_works_with_spaces_and_accents_in_paths() {
 
     let other = root.path().join("outra cópia");
     fs::create_dir_all(&other).unwrap();
-    git(&other, &["clone", "-q", remote.to_str().unwrap(), "."]);
+    run_git(&other, &["clone", "-q", remote.to_str().unwrap(), "."]);
     configure_identity(&other);
     commit_file(&other, "novo é bom.txt", "n\n", "novo");
-    git(&other, &["push", "-q", "origin", "main"]);
+    run_git(&other, &["push", "-q", "origin", "main"]);
 
     let fetched = fetch_remote(&git, &fetch_req(&path, "origin")).unwrap();
     assert_eq!(fetched.sync.state, SyncState::Behind);
@@ -717,7 +717,7 @@ fn failed_operations_never_fall_back_to_destructive_commands() {
     commit_file(pair.local.path(), "local.txt", "l\n", "local");
     let other = clone_of(pair.remote.path());
     commit_file(other.path(), "remoto.txt", "r\n", "remoto");
-    git(other.path(), &["push", "-q", "origin", "main"]);
+    run_git(other.path(), &["push", "-q", "origin", "main"]);
     let head = git_out(pair.local.path(), &["rev-parse", "HEAD"]);
     let reflog = git_out(pair.local.path(), &["reflog", "--format=%H"]);
 
