@@ -1,4 +1,4 @@
-# GitFlow Desktop (nome provisório) — Fase 4
+# GitFlow Desktop (nome provisório) — Fase 5
 
 Aplicativo desktop (Tauri + React + TypeScript + Rust) para **operar repositórios Git locais** sem digitar comandos.
 
@@ -10,8 +10,11 @@ Aplicativo desktop (Tauri + React + TypeScript + Rust) para **operar repositóri
   o resultado real do Git.
 - **Fase 4** (importação de ZIP): importa uma atualização de código a partir de um `.zip` por um fluxo revisável — inspeção
   sem extrair, prévia do plano, branch de trabalho dedicada, gravação controlada, diff real, commit só dos arquivos da
-  importação e push em etapa separada (reaproveitando o push da Fase 3). **Não há** merge manual, pull requests nem
-  armazenamento de credenciais (fase 5 em diante).
+  importação e push em etapa separada (reaproveitando o push da Fase 3).
+- **Fase 5** (merge e proteção da `main`): integra manualmente uma branch em outra, com prévia somente leitura,
+  detecção de conflitos, confirmação explícita (e específica para `main`/`master`) validada no backend e resultado
+  verdadeiro lido do Git. **Não há** resolução visual de conflitos, pull requests, proteção de branches no GitHub nem
+  armazenamento de credenciais.
 
 ## Início rápido (Windows)
 
@@ -70,9 +73,11 @@ src-tauri/
     status.rs                `status --porcelain=v2 -z` + parser
     diff.rs                  Diff por alvo + parser unificado
     remote.rs                Fase 3: diagnóstico de sincronização, fetch, pull e push, classificação de falhas
+    merge.rs                 Fase 5: prévia e execução do merge manual, proteção da main
     error.rs                 Erros serializáveis { code, message, details }
     tests/integration.rs     Testes com Git real em repositórios temporários
     tests/phase3.rs          Testes da Fase 3 com remotos locais (repositórios bare temporários)
+    tests/phase5.rs          Testes da Fase 5 (merge) com repositórios Git reais e temporários
 ```
 
 Comandos nativos:
@@ -82,6 +87,7 @@ Comandos nativos:
 | Leitura | `check_git`, `open_repository`, `get_repository_status`, `get_file_diff` (agora também com o alvo `head`), `list_branches`, `check_branch_name`, `prepare_commit_review` |
 | Escrita local (Fase 2) | `create_branch` (não troca de branch), `switch_branch`, `create_commit` |
 | Sincronização (Fase 3) | `get_sync_status` (somente leitura, sem rede), `fetch_remote`, `pull_branch`, `push_branch` |
+| Merge (Fase 5) | `preview_merge` (somente leitura), `merge_branches` (exige confirmação e a revisão atual) |
 
 Novos módulos em `git-core/src/`: `branches.rs` (listar/validar/criar/trocar), `commit.rs` (revisão e commit seletivo),
 `lock.rs` (uma operação de escrita por repositório). `runner.rs` ganhou `run_raw` (stdout/stderr/código sem interpretação,
@@ -367,6 +373,88 @@ arquivos; backups e temporários ficam ao lado). Ao abrir o repositório, uma op
    `src\app.txt` restaurado. Edite um arquivo importado antes de desfazer: ele é preservado e listado.
 8. **Retomada**: importe, feche o aplicativo antes de commitar e reabra o repositório: a operação volta na etapa de revisão.
 
+## Fase 5 — Merge e proteção da `main`
+
+Aba **Merge**: integra os commits de uma branch **de origem** em uma branch **de destino**, sempre por um fluxo revisável.
+A direção é explícita na tela (`feature/login → main`): só o destino é modificado.
+
+### Fluxo
+
+1. **Seleção** — origem e destino (listas das branches locais; a mesma branch não pode ocupar os dois lados; a branch
+   atual e `main`/`master` aparecem identificadas). Selecionar nunca executa nada.
+2. **Prévia (somente leitura, `preview_merge`)** — o backend valida as duas branches, lê o estado real do Git e devolve:
+   a relação entre elas (idênticas, já integrada, **avanço rápido**, **divergentes** → commit de merge, sem histórico em
+   comum), os commits exclusivos de cada lado, a **previsão de conflitos** (`git merge-tree --write-tree`, Git 2.38+;
+   em versões antigas a tela diz que não sabe, sem presumir) e os **bloqueios** com os arquivos envolvidos.
+3. **Preparar → confirmar** — "Preparar integração" só abre a confirmação (resumo, resultado esperado, aceite explícito e,
+   para `main`/`master`, digitar o nome da branch).
+4. **Execução (`merge_branches`)** — o backend recalcula a prévia sob a trava do repositório e só executa se a revisão for
+   idêntica à confirmada; depois **confere o resultado no Git** (HEAD, pais do commit, ancestralidade, status).
+5. **Resultado** — avanço rápido (hash final), commit de merge (hash), ou **conflitos** (lista de caminhos e códigos,
+   "merge NÃO concluído"), com a saída e o código de saída reais do Git e o estado atualizado do repositório.
+
+### Bloqueios (antes de chamar o `git merge`)
+
+Origem/destino inexistentes ou iguais; HEAD desanexado ou sem commits; **operação em andamento** (merge, rebase,
+cherry-pick…); **conflitos anteriores**; alterações **staged** ou **não preparadas** (lista dos arquivos); arquivos **não
+rastreados que a origem também cria** (seriam sobrescritos; os demais não rastreados não bloqueiam); históricos
+independentes; e **destino diferente da branch atual**. O merge altera a branch ativa, então o aplicativo **nunca troca de
+branch sozinho**: quando esse é o único impedimento, a tela oferece "Trocar para <destino>", que usa a troca explícita e
+segura da Fase 2 e depois refaz a revisão.
+
+### Proteção da `main` (no backend)
+
+- `main` e `master` (mesma lista do push da Fase 3) como **destino** exigem `confirmTarget` igual ao nome da branch.
+- Toda integração exige `confirmed = true`. Sem isso, o backend recusa **antes** de qualquer alteração.
+- A revisão tem um `token` (SHA-256 de: raiz, branch atual, OID do HEAD, branches e OIDs de origem/destino, base do merge,
+  operação em andamento e arquivos do status). Qualquer mudança entre a prévia e a execução (novo commit em qualquer
+  lado, troca de branch, arquivos alterados, operação iniciada) resulta em `STALE_REVIEW`: nada é feito e uma nova
+  revisão é exigida. Se a prévia mudar enquanto o usuário confirma, a confirmação é invalidada na interface.
+- É uma proteção **operacional local**. Não configura regras de proteção de branch no GitHub.
+
+### Como o Git é chamado
+
+`git -c rerere.enabled=false merge --no-edit --no-autostash (--ff-only | --no-ff) refs/heads/<origem>` — argumentos
+separados, sem shell. A estratégia é a da prévia (`--ff-only` no avanço rápido, `--no-ff` quando divergentes), então o
+usuário vê exatamente o que será feito. **Nunca** usa `stash`, `reset`, `clean`, `checkout -f`, `--force`,
+`--allow-unrelated-histories` nem resolve conflitos (`rerere` desativado). Hooks e assinatura seguem a configuração do
+repositório; um hook que recuse o commit de merge é reportado como falha, não como sucesso.
+
+### Conflitos
+
+O Git deixa o merge em andamento: os arquivos ficam com marcadores no disco e o estado é lido de `status.rs`
+(`operation = merge`, arquivos `UU`/`AA`/…). A tela lista os caminhos e a aba Alterações mostra os arquivos em conflito.
+Enquanto o merge estiver em andamento, qualquer nova integração é bloqueada. A resolução é manual (fora do aplicativo):
+edite, `git add`, `git commit`, ou cancele com `git merge --abort`.
+
+### Limitações conhecidas
+
+- Não há editor visual de conflitos nem botão "abortar merge" (a resolução/cancelamento é feito no Git).
+- O destino precisa ser a branch atual (troca explícita pela própria aba).
+- A previsão de conflitos requer Git 2.38+; antes disso só se sabe ao executar.
+- Colisões de arquivo não rastreado são detectadas por caminho exato; casos exóticos (arquivo × pasta) são recusados pelo próprio Git, que não sobrescreve nada.
+- Só branches locais; não há merge de branches remotas, squash, rebase nem escolha de mensagem do commit de merge.
+
+### Testes da Fase 5
+
+`git-core/tests/phase5.rs` (Git real em repositórios temporários): prévia somente leitura, avanço rápido, commit de
+merge com pais corretos, direção origem→destino, já integrada/idêntica, nomes com acentos e espaços; bloqueios (origem/
+destino inexistentes ou iguais, nomes perigosos, repositório inválido, staged, unstaged, não rastreado colidindo, destino
+não atual, HEAD desanexado, rebase e merge em andamento, conflitos anteriores); conflitos reais (caminhos, marcadores
+preservados, nada em stash); confirmação ausente, `main`/`master` sem confirmação específica (várias variações), revisão
+desatualizada (novo commit na origem/destino, troca de branch, arquivos alterados, token forjado ou de outra seleção),
+trava concorrente, Git ausente, hook recusando o merge e opções destrutivas de configuração (`autoStash`, `rerere`).
+No frontend: `lib/merge.test.ts` e `components/merge/MergeView.test.tsx`.
+
+### Validação manual da Fase 5 (Windows, repositório descartável)
+
+1. Crie `feature/x` com um commit e volte para `main`. Em **Merge**, origem `feature/x`, destino `main`: avanço rápido.
+   Sem digitar `main` e marcar o aceite, o botão de integrar fica desabilitado.
+2. Crie commits divergentes (arquivos diferentes): confirme que é criado um commit de merge com dois pais.
+3. Altere a mesma linha nas duas branches: a prévia prevê o conflito; ao confirmar, o resultado mostra o arquivo e "NÃO concluído".
+4. Com um arquivo modificado no repositório: o merge é bloqueado e o arquivo continua intacto.
+5. Com a branch atual diferente do destino: use "Trocar para <destino>" e revise de novo.
+
 ## Validação manual da Fase 2
 
 1. `npm run tauri:dev`, abra um repositório de teste (crie um com `git init` numa pasta descartável).
@@ -381,7 +469,7 @@ arquivos; backups e temporários ficam ao lado). Ao abrir o repositório, uma op
 
 ## Fora do escopo (próximas fases)
 
-merge manual entre branches e proteção da `main` (Fase 5), resolução de conflitos, pull requests, sistema próprio de
-autenticação, exclusão de arquivos por importação (se vier a existir, será um fluxo separado, com prévia e confirmação),
+resolução visual de conflitos e cancelamento de merge pela interface, pull requests, proteção de branches no GitHub, sistema próprio de
+autenticação, testes/robustez como fase independente (Fase 6), exclusão de arquivos por importação (se vier a existir, será um fluxo separado, com prévia e confirmação),
 instalador/publicação.
 A navegação lateral (`NavId`) e `App.tsx` já têm o ponto de extensão.

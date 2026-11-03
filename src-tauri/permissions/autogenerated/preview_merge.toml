@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-preview-merge"
+description = "Enables the preview_merge command without any pre-configured scope."
+commands.allow = ["preview_merge"]
+
+[[permission]]
+identifier = "deny-preview-merge"
+description = "Denies the preview_merge command without any pre-configured scope."
+commands.deny = ["preview_merge"]

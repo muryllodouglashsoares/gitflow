@@ -26,6 +26,8 @@ fn main() {
                 "push_import_branch",
                 "find_import_operation",
                 "finish_import",
+                "preview_merge",
+                "merge_branches",
             ]),
         ),
     )

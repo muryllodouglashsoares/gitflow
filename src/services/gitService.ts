@@ -7,7 +7,8 @@
  * createBranch, switchBranch, createCommit. Sincronização remota (Fase 3): getSyncStatus (somente
  * leitura, sem rede) e as operações predefinidas fetchRemote, pullBranch e pushBranch. Importação de
  * ZIP (Fase 4): inspectZip (somente leitura), prepareImportBranch, applyImport, rollbackImport,
- * createImportCommit, pushImportBranch, findImportOperation e finishImport. A interface nunca envia
+ * createImportCommit, pushImportBranch, findImportOperation e finishImport. Merge manual (Fase 5):
+ * previewMerge (somente leitura) e mergeBranches (exige confirmação e a revisão atual). A interface nunca envia
  * comandos ou argumentos de Git: apenas caminhos, nomes de branch, mensagem de commit e
  * identificadores.
  */
@@ -35,6 +36,10 @@ import type {
   ImportPlan,
   ImportResult,
   InspectRequest,
+  MergePreview,
+  MergePreviewRequest,
+  MergeRequest,
+  MergeResult,
   PrepareBranchRequest,
   PreparedBranch,
   PullRequest,
@@ -149,6 +154,16 @@ export const gitService = {
   /** Encerra a operação (após commit ou reversão) e limpa temporários e backups. */
   finishImport: (request: ImportOperationRequest) =>
     call<ImportOperation>("finish_import", { request }),
+
+  // --- Fase 5: merge manual ---
+  /** Analisa `origem → destino` sem alterar nada (estado, divergência, previsão de conflitos). */
+  previewMerge: (request: MergePreviewRequest) => call<MergePreview>("preview_merge", { request }),
+
+  /**
+   * Integra a origem no destino. O backend exige `confirmed`, a confirmação específica para
+   * main/master e o `token` da revisão atual; nunca força, guarda ou descarta alterações.
+   */
+  mergeBranches: (request: MergeRequest) => call<MergeResult>("merge_branches", { request }),
 };
 
 /** Extrai o `GitError` de qualquer coisa lançada por este serviço. */

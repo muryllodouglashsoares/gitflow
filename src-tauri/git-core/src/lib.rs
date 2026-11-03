@@ -7,7 +7,8 @@
 //! Consultas (`rev-parse`, `status`, `diff`, `for-each-ref`) e, a partir da Fase 2, as
 //! operações locais de escrita **predefinidas**: criar branch, trocar de branch e criar commit
 //! seletivo. A Fase 3 acrescenta o diagnóstico de sincronização e `fetch`, `pull` e `push`
-//! predefinidos (módulo `remote`). A Fase 4 acrescenta a importação segura de ZIP (módulo `import`). Não existe execução de comandos arbitrários: cada operação monta seus próprios
+//! predefinidos (módulo `remote`). A Fase 4 acrescenta a importação segura de ZIP (módulo `import`). A Fase 5 acrescenta o merge
+//! manual entre branches locais com prévia, confirmação e proteção da `main` (módulo `merge`). Não existe execução de comandos arbitrários: cada operação monta seus próprios
 //! argumentos, valida as entradas e confere o resultado real depois de executar.
 
 pub mod branches;
@@ -16,6 +17,7 @@ pub mod diff;
 pub mod error;
 pub mod import;
 pub mod lock;
+pub mod merge;
 pub mod remote;
 pub mod repository;
 pub mod runner;
@@ -38,6 +40,11 @@ pub use import::{
     ImportResult, ImportState, InspectRequest, PlanEntry, PlanSummary, PrepareBranchRequest,
     PreparedBranch, PushImportRequest, RollbackResult, ZipLayout,
 };
+pub use merge::{
+    is_protected_branch, merge_branches, preview_merge, BlockerKind, CommitBrief, ConflictEntry,
+    ConflictForecast, ForecastState, MergeBlocker, MergeOutcome, MergePreview, MergePreviewRequest,
+    MergeRelation, MergeRequest, MergeResult, MergeStrategy,
+};
 pub use remote::{
     fetch_remote, get_sync_status, pull_branch, push_branch, FetchRequest, FetchResult,
     PullOutcome, PullRequest, PullResult, PullStrategy, PushRequest, PushResult, RemoteInfo,
@@ -45,4 +52,4 @@ pub use remote::{
 };
 pub use repository::{check_availability, open_repository, GitAvailability, RepositoryInfo};
 pub use runner::Git;
-pub use status::{get_status, RepositoryStatus};
+pub use status::{get_status, Operation, RepositoryStatus, StatusSummary};

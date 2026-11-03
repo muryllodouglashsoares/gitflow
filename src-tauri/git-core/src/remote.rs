@@ -37,7 +37,7 @@ const NETWORK_TIMEOUT_SECS: u64 = 300;
 const MAX_OUTPUT_SHOWN_CHARS: usize = 4000;
 const MAX_BLOCKING_FILES_LISTED: usize = 12;
 /// Branches para as quais o envio exige uma confirmação adicional e explícita.
-const PROTECTED_NAMES: &[&str] = &["main", "master"];
+pub(crate) const PROTECTED_NAMES: &[&str] = &["main", "master"];
 
 // ----------------------------------------------------------------------------
 // Modelos

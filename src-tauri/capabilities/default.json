@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Permissões mínimas da janela principal: seletor de pasta, consultas Git e as operações locais predefinidas da Fase 2 (branch e commit) e a sincronização remota predefinida da Fase 3 (diagnóstico, fetch, pull e push) e os comandos predefinidos da importação de ZIP da Fase 4.",
+  "description": "Permissões mínimas da janela principal: seletor de pasta, consultas Git e as operações locais predefinidas da Fase 2 (branch e commit) e a sincronização remota predefinida da Fase 3 (diagnóstico, fetch, pull e push) os comandos predefinidos da importação de ZIP da Fase 4 e os comandos predefinidos de merge da Fase 5 (prévia somente leitura e integração confirmada).",
   "windows": ["main"],
   "permissions": [
     "core:default",
@@ -27,6 +27,8 @@
     "allow-create-import-commit",
     "allow-push-import-branch",
     "allow-find-import-operation",
-    "allow-finish-import"
+    "allow-finish-import",
+    "allow-preview-merge",
+    "allow-merge-branches"
   ]
 }

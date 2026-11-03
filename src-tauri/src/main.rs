@@ -29,6 +29,8 @@ fn main() {
             commands::push_import_branch,
             commands::find_import_operation,
             commands::finish_import,
+            commands::preview_merge,
+            commands::merge_branches,
         ])
         .run(tauri::generate_context!())
         .expect("falha ao iniciar o GitFlow Desktop");

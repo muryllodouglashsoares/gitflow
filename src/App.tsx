@@ -7,6 +7,7 @@ import { CommitResultBanner } from "./components/commit/CommitResultBanner";
 import { ReviewFileList } from "./components/commit/ReviewFileList";
 import { DiffViewer } from "./components/diff/DiffViewer";
 import { ImportView } from "./components/import/ImportView";
+import { MergeView } from "./components/merge/MergeView";
 import { SyncView } from "./components/sync/SyncView";
 import { RepositoryHeader } from "./components/layout/RepositoryHeader";
 import { Sidebar, type NavId } from "./components/layout/Sidebar";
@@ -15,6 +16,7 @@ import { useBranchActions } from "./hooks/useBranchActions";
 import { useBranches } from "./hooks/useBranches";
 import { useCommitFlow } from "./hooks/useCommitFlow";
 import { useFileDiff } from "./hooks/useFileDiff";
+import { useMerge } from "./hooks/useMerge";
 import { useRepositoryWorkspace } from "./hooks/useRepositoryWorkspace";
 import { useSync } from "./hooks/useSync";
 import { useZipImport } from "./hooks/useZipImport";
@@ -43,7 +45,11 @@ export default function App() {
   );
 
   // A lista de branches também alimenta a importação de ZIP (base e nome da branch de trabalho).
-  const branches = useBranches(repoPath, status.updatedAt, nav === "branches" || nav === "import");
+  const branches = useBranches(
+    repoPath,
+    status.updatedAt,
+    nav === "branches" || nav === "import" || nav === "merge",
+  );
   const branchActions = useBranchActions(repoPath, workspace.runExclusive, workspace.refresh);
   // Fase 3: diagnóstico de sincronização (sem rede) sempre disponível; fetch/pull/push sob demanda.
   const sync = useSync(repoPath, status.updatedAt, workspace.runExclusive, workspace.refresh);
@@ -56,6 +62,19 @@ export default function App() {
     syncStatus: sync.diagnosis.data,
     runExclusive: workspace.runExclusive,
     refresh: workspace.refresh,
+  });
+
+  // Fase 5: merge manual. O estado do fluxo vive aqui para sobreviver à troca de aba.
+  const merge = useMerge({
+    repoPath,
+    enabled: nav === "merge",
+    refreshToken: status.updatedAt,
+    branchList: branches.branches.data,
+    runExclusive: workspace.runExclusive,
+    onChanged: workspace.refresh,
+    reloadBranches: branches.reload,
+    switchTo: branchActions.switchTo,
+    dismissSwitch: branchActions.dismiss,
   });
 
   const reviewFile = commit.review.data?.files.find((f) => f.path === commit.focusPath);
@@ -105,6 +124,17 @@ export default function App() {
                 locked={workspace.mutating !== null && !zipImport.running}
                 syncStatus={sync.diagnosis.data}
                 onRefresh={workspace.refresh}
+              />
+            ) : nav === "merge" ? (
+              <MergeView
+                branches={branches.branches}
+                ctl={merge}
+                locked={workspace.mutating !== null}
+                switching={branchActions.pending?.kind === "switch"}
+                switchError={branchActions.error}
+                onDismissSwitchError={branchActions.dismiss}
+                onReloadBranches={branches.reload}
+                onOpenChanges={() => setNav("changes")}
               />
             ) : nav === "sync" ? (
               <SyncView status={status.data} sync={sync} locked={workspace.mutating !== null} />

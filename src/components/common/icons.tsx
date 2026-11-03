@@ -113,3 +113,20 @@ export const ImportIcon = (p: IconProps) => (
     <path d="M6.25 11.25h3.5" />
   </Icon>
 );
+
+/** Dois ramos que se encontram (merge). */
+export const MergeIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <circle cx="4.5" cy="3.5" r="1.5" />
+    <circle cx="4.5" cy="12.5" r="1.5" />
+    <circle cx="11.5" cy="12.5" r="1.5" />
+    <path d="M4.5 5v6" />
+    <path d="M4.5 5c0 3.5 7 2.5 7 6" />
+  </Icon>
+);
+
+export const ArrowRightIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M2.5 8h10.5M9 4l4 4-4 4" />
+  </Icon>
+);

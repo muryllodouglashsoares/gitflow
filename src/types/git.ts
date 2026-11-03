@@ -533,3 +533,115 @@ export interface PushImportRequest {
   target: SyncTarget;
   confirmProtectedBranch: boolean;
 }
+
+// ----------------------------------------------------------------------------
+// Fase 5: merge manual (espelha `merge.rs`)
+// ----------------------------------------------------------------------------
+
+export type MergeRelation =
+  | "identical"
+  | "alreadyIntegrated"
+  | "fastForward"
+  | "diverged"
+  | "unrelated";
+
+export type MergeStrategy = "fastForward" | "mergeCommit";
+
+export type BlockerKind =
+  | "unbornHead"
+  | "detachedHead"
+  | "operationInProgress"
+  | "conflicts"
+  | "stagedChanges"
+  | "unstagedChanges"
+  | "untrackedOverwrite"
+  | "unrelatedHistories"
+  | "targetNotCurrent";
+
+export interface MergeBlocker {
+  kind: BlockerKind;
+  message: string;
+  /** Arquivos que causam o bloqueio (limitados; veja `filesTotal`). */
+  files: string[];
+  filesTotal: number;
+}
+
+export interface CommitBrief {
+  oid: string;
+  subject: string;
+}
+
+export type ForecastState = "notApplicable" | "clean" | "conflicts" | "unavailable";
+
+export interface ConflictForecast {
+  state: ForecastState;
+  files: string[];
+}
+
+export interface MergePreviewRequest {
+  repoPath: string;
+  /** Branch cujos commits serão integrados. */
+  source: string;
+  /** Branch que receberá os commits (precisa ser a branch atual para executar). */
+  target: string;
+}
+
+export interface MergePreview {
+  repoPath: string;
+  source: BranchEntry;
+  target: BranchEntry;
+  targetProtected: boolean;
+  /** Texto exato que o usuário precisa digitar para integrar na branch principal. */
+  requiredConfirmation: string | null;
+  currentBranch: string | null;
+  headOid: string | null;
+  targetIsCurrent: boolean;
+  relation: MergeRelation;
+  strategy: MergeStrategy | null;
+  mergeBase: string | null;
+  sourceOnly: number;
+  targetOnly: number;
+  sourceCommits: CommitBrief[];
+  forecast: ConflictForecast;
+  summary: StatusSummary;
+  operation: Operation | null;
+  blockers: MergeBlocker[];
+  notes: string[];
+  canExecute: boolean;
+  /** Identifica o que foi revisado; precisa voltar idêntico em `merge_branches`. */
+  token: string;
+}
+
+export interface MergeRequest {
+  repoPath: string;
+  source: string;
+  target: string;
+  token: string;
+  confirmed: boolean;
+  /** Para `main`/`master`: o nome do destino, digitado pelo usuário. */
+  confirmTarget: string | null;
+}
+
+export type MergeOutcome = "fastForward" | "mergeCommit" | "conflicts";
+
+export interface ConflictEntry {
+  path: string;
+  code: string | null;
+}
+
+export interface MergeResult {
+  repoPath: string;
+  source: string;
+  target: string;
+  outcome: MergeOutcome;
+  sourceOid: string;
+  headBefore: string | null;
+  headAfter: string | null;
+  mergeCommit: boolean;
+  integratedCommits: number;
+  conflicts: ConflictEntry[];
+  exitCode: number | null;
+  output: string;
+  /** Estado do repositório lido depois da operação. */
+  status: RepositoryStatus;
+}

@@ -181,7 +181,7 @@ pub fn list_branches(git: &Git, repo_path: &str) -> Result<BranchList> {
     })
 }
 
-fn read_local_branches(git: &Git, root: &Path) -> Result<Vec<BranchEntry>> {
+pub(crate) fn read_local_branches(git: &Git, root: &Path) -> Result<Vec<BranchEntry>> {
     let opts = RunOptions {
         timeout: Duration::from_secs(30),
         max_stdout: 4 * 1024 * 1024,

@@ -11,6 +11,9 @@
 //! `rollback_import`, `create_import_commit`, `push_import_branch`, `find_import_operation` e
 //! `finish_import`. O backend revalida tudo (caminhos, plano, estado do repositório); a interface
 //! nunca é a fronteira de confiança. O envio reutiliza o `push_branch` da Fase 3.
+//! Merge manual (Fase 5): `preview_merge` (somente leitura) e `merge_branches`. O backend exige a
+//! confirmação explícita (e a confirmação específica para `main`/`master`), revalida o estado e só
+//! executa se a revisão apresentada ainda for a mesma; a interface nunca é a fronteira de confiança.
 //! Nenhum comando aceita texto de comando Git vindo da interface.
 
 use gitflow_git::{
@@ -18,7 +21,8 @@ use gitflow_git::{
     CommitReview, CreateBranchRequest, CreatedBranch, DiffRequest, ErrorCode, FetchRequest,
     FetchResult, FileDiff, FinishImportRequest, Git, GitAvailability, GitError,
     ImportCommitRequest, ImportOperation, ImportPlan, ImportResult, InspectRequest,
-    PrepareBranchRequest, PreparedBranch, PullRequest, PullResult, PushImportRequest, PushRequest,
+    MergePreview, MergePreviewRequest, MergeRequest, MergeResult, PrepareBranchRequest,
+    PreparedBranch, PullRequest, PullResult, PushImportRequest, PushRequest,
     PushResult, RepositoryInfo, RepositoryStatus, ReviewRequest, RollbackResult,
     SwitchBranchRequest, SwitchResult, SyncStatus,
 };
@@ -259,6 +263,29 @@ pub async fn finish_import(request: FinishImportRequest) -> Result<ImportOperati
     blocking(move || {
         let git = Git::locate()?;
         core::finish_import(&git, &request)
+    })
+    .await
+}
+
+/// Analisa a integração `origem → destino` sem alterar nada: estado do repositório, divergência,
+/// previsão de conflitos e bloqueios. O `token` devolvido identifica o que foi revisado.
+#[tauri::command]
+pub async fn preview_merge(request: MergePreviewRequest) -> Result<MergePreview, GitError> {
+    blocking(move || {
+        let git = Git::locate()?;
+        core::preview_merge(&git, &request)
+    })
+    .await
+}
+
+/// Integra a origem no destino (`git merge`). Exige confirmação explícita (e a confirmação
+/// específica para `main`/`master`), revalida o estado e recusa se a revisão estiver desatualizada.
+/// Nunca troca de branch, força, guarda ou descarta alterações, nem resolve conflitos sozinho.
+#[tauri::command]
+pub async fn merge_branches(request: MergeRequest) -> Result<MergeResult, GitError> {
+    blocking(move || {
+        let git = Git::locate()?;
+        core::merge_branches(&git, &request)
     })
     .await
 }
