@@ -1,4 +1,4 @@
-# GitFlow Desktop (nome provisório) — Fase 5
+# GitFlow Desktop (nome provisório) Fase 5
 
 Aplicativo desktop (Tauri + React + TypeScript + Rust) para **operar repositórios Git locais** sem digitar comandos.
 
